@@ -26,7 +26,7 @@ Popcorn.player( "jwplayer", {
       media.dispatchEvent( "play" );
 
       media.dispatchEvent( "playing" );
-      jwplayer( container.id ).play();
+      jwplayer( container.id ).play(true);
     };
     
     media.pause = function() {
@@ -34,7 +34,7 @@ Popcorn.player( "jwplayer", {
       if ( !media.paused ) {
         media.paused = true;
         media.dispatchEvent( "pause" );
-        jwplayer( container.id ).pause();
+        jwplayer( container.id ).pause(true);
       }
     };
 
