@@ -436,6 +436,18 @@ asyncTest( "Popcorn YouTube Plugin Url Regex Test", function() {
       }
     }).volume( 0 );
   });
+
+  // separate test for url params because we need to check different options
+  var paramsPopcorn = Popcorn.youtube( "#paramsVideo", "http://www.youtube.com/v/nfGV32RNkhw?controls=0" );
+  paramsPopcorn.on( "loadeddata", function() {
+
+  alert(JSON.stringify(paramsPopcorn.media));
+    // equal( paramsPopcorn.media.src, urlTest.expected, "Video id is correct for " + urlTest.name + ": " + urlTest.url );
+    paramsPopcorn.pause();
+
+    paramsPopcorn.destroy();
+  }).volume( 0 );
+
 });
 
 asyncTest( "Player height and width", function() {
