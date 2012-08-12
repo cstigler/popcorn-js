@@ -342,8 +342,12 @@
           callback && callback();
         });
 
-        // if there is only one item on the queue, start it
-        !_running && _queue[ 0 ]();
+        if ( _running ) {
+          basePlayer.dispatchEvent( "waiting" );
+        } else {
+          // if there is only one item on the queue, start it
+          _queue [ 0 ]();
+        }
       }
     };
   };
