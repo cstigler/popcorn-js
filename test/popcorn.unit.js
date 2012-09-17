@@ -1744,21 +1744,46 @@ asyncTest( "Custom", 1, function() {
   p.emit( "eventz0rz" );
 });
 
-test( "on/off/emit", 4, function() {
+test( "on/off/emit", 6, function() {
 
   var $pop = Popcorn( "#video" );
 
-  $pop.on( "foo", function() {
-    deepEqual( this, $pop, "`this` is the popcorn instance" );
-    equal( typeof this.data.events.foo, "object", "events hash registered at this.data.events.foo" );
-    equal( Popcorn.sizeOf( this.data.events.foo ), 1, "Only one event is registered" );
+  var decoyCalled = false,
+      finishCount = 0;
 
-    $pop.off( "foo" );
+  var finishTest = function() {
+    finishCount++;
 
-    equal( this.data.events.foo, null, "events hash is null at this.data.events.foo" );
-  });
+    if( finishCount === 1 ) {
+      deepEqual( this, $pop, "`this` is the popcorn instance" );
+      equal( typeof this.data.events.foo, "object", "events hash registered at this.data.events.foo" );
+      equal( Popcorn.sizeOf( this.data.events.foo ), 2, "Two events are registered" );
+    } else if( finishCount === 2 ) {
+      equal( Popcorn.sizeOf( this.data.events.foo ), 1, "Only one event is registered" );
+    } else {
+      ok( false, "global off() is broken" );
+    }
+  };
+
+  var decoyFunc = function() {
+    equal( decoyCalled, false, "second callback on is called precisely once" );
+    decoyCalled = true;
+  };
+
+  $pop.on( "foo", finishTest );
+  $pop.on( "foo", decoyFunc );
 
   $pop.emit( "foo" );
+
+  $pop.off( "foo", decoyFunc );
+
+  $pop.emit( "foo" );
+
+  $pop.off( "foo" );
+
+  equal( $pop.data.events.foo, null, "events hash is null at this.data.events.foo" );
+
+  $pop.emit( "foo" ); // shouldn't do anything
 
   $pop.destroy();
 });
@@ -2207,10 +2232,10 @@ asyncTest( "Special track event listeners: trackadded", 3, function() {
   var $pop = Popcorn( "#video" );
 
   Popcorn.plugin( "trackaddedplugin", {
-    _setup: function(){},
-    _teardown: function() {},
-    start: function() {},
-    end: function() {}
+    _setup: Popcorn.nop,
+    _teardown: Popcorn.nop,
+    start: Popcorn.nop,
+    end: Popcorn.nop
   });
 
   $pop.on( "trackadded", function( e ) {
@@ -2227,16 +2252,40 @@ asyncTest( "Special track event listeners: trackadded", 3, function() {
   $pop.trackaddedplugin({});
 });
 
+test( "Special track event listeners: tracksetup", 3, function() {
+
+  var $pop = Popcorn( "#video" );
+
+  Popcorn.plugin( "tracksetupplugin", {
+    _setup: Popcorn.nop,
+    _teardown: Popcorn.nop,
+    start: Popcorn.nop,
+    end: Popcorn.nop
+  });
+
+  $pop.on( "tracksetup", function( e ) {
+
+    ok( true, "tracksetup event fired" );
+    equal( e.type, "tracksetup", "event is of correct type" );
+    equal( e.plugin, "tracksetupplugin", "plugin is of correct type" );
+  });
+
+  $pop.tracksetupplugin({});
+
+  Popcorn.removePlugin( "tracksetupplugin" );
+  $pop.destroy();
+});
+
 asyncTest( "Special track event listeners: trackremoved", 3, function() {
 
   var $pop = Popcorn( "#video" ),
       pluginId = "trackremovedplugin";
 
   Popcorn.plugin( "trackremovedplugin", {
-    _setup: function(){},
-    _teardown: function() {},
-    start: function() {},
-    end: function() {}
+    _setup: Popcorn.nop,
+    _teardown: Popcorn.nop,
+    start: Popcorn.nop,
+    end: Popcorn.nop
   });
 
   $pop.on( "trackremoved", function( e ) {
@@ -2252,6 +2301,33 @@ asyncTest( "Special track event listeners: trackremoved", 3, function() {
 
   $pop.trackremovedplugin( pluginId, {} );
   $pop.removeTrackEvent( pluginId );
+});
+
+
+test( "Special track event listeners: trackteardown", 3, function() {
+
+  var $pop = Popcorn( "#video" ),
+      pluginId = "trackteardownplugin";
+
+  Popcorn.plugin( "trackteardownplugin", {
+    _setup: Popcorn.nop,
+    _teardown: Popcorn.nop,
+    start: Popcorn.nop,
+    end: Popcorn.nop
+  });
+
+  $pop.on( "trackteardown", function( e ) {
+
+    ok( true, "trackteardown event fired" );
+    equal( e.type, "trackteardown", "event is of correct type" );
+    equal( e.plugin, "trackteardownplugin", "plugin is of correct type" );
+  });
+
+  $pop.trackteardownplugin( pluginId, {} );
+  $pop.removeTrackEvent( pluginId );
+
+  Popcorn.removePlugin( "trackteardownplugin" );
+  $pop.destroy();
 });
 
 asyncTest( "Special track event listeners: trackstart, trackend", function() {
@@ -3670,6 +3746,74 @@ asyncTest( "In/Out aliases", function() {
     equal( counter, 2, "Counter is at 2, out has been called" );
     plus();
   });
+});
+
+asyncTest( "Popcorn instance integrity inside natives", 4, function() {
+  var p = Popcorn( "#video" ),
+      id = "test-id";
+
+  Popcorn.plugin( "integrityTest", {
+    _setup: function( options ) {
+      ok( this === p, "Popcorn instance accessible in plugin _setup" );
+    },
+    start: function( event, options ) {
+      ok( this === p, "Popcorn instance accessible in plugin start" );
+    },
+    end: function( event, options ) {
+      ok( this === p, "Popcorn instance accessible in plugin end" );
+      p.removeTrackEvent( id );
+    },
+    _teardown: function( options ) {
+      ok( this === p, "Popcorn instance accessible in plugin _teardown" );
+    }
+  });
+
+  p.cue( 4.5, function() {
+    Popcorn.removePlugin( "integrityTest" );
+    p.currentTime( 0 );
+    p.destroy();
+    start();
+  });
+
+  p.integrityTest( id, { start: 3, end: 4 } );
+  p.play( 2 );
+});
+
+test( "Disable/Enable/Toggle on non existent plugins", 5, function() {
+  var popcorn = Popcorn( "#video" ),
+      plugin = "garbage";
+
+  ok( !popcorn.data.disabled[ plugin ], "non existent plugin starts enabled." );
+  popcorn.disable( plugin );
+  ok( popcorn.data.disabled[ plugin ], "non existent plugin can be disiabled." );
+  popcorn.enable( plugin );
+  ok( !popcorn.data.disabled[ plugin ], "non existent plugin can become enabled again." );
+  popcorn.toggle( plugin );
+  ok( popcorn.data.disabled[ plugin ], "non existent plugin can be toggled." );
+  popcorn.toggle( plugin );
+  ok( !popcorn.data.disabled[ plugin ], "non existent plugin can be toggled again." );
+});
+
+test( "Disable/Enable/Toggle on dead plugins", 5, function() {
+  var popcorn = Popcorn( "#video" ),
+      plugin = "dead";
+
+  Popcorn.plugin( plugin, {
+    _setup: Popcorn.nop,
+    _teardown: Popcorn.nop,
+    start: Popcorn.nop,
+    end: Popcorn.nop
+  });
+
+  ok( !popcorn.data.disabled[ plugin ], "dead plugins plugin starts enabled." );
+  popcorn.disable( plugin );
+  ok( popcorn.data.disabled[ plugin ], "dead plugins plugin can be disiabled." );
+  popcorn.enable( plugin );
+  ok( !popcorn.data.disabled[ plugin ], "dead plugins plugin can become enabled again." );
+  popcorn.toggle( plugin );
+  ok( popcorn.data.disabled[ plugin ], "dead plugins plugin can be toggled." );
+  popcorn.toggle( plugin );
+  ok( !popcorn.data.disabled[ plugin ], "dead plugins plugin can be toggled again." );
 });
 
 module( "Popcorn TrackEvents" );

@@ -440,9 +440,14 @@
 
     disable: function( instance, plugin ) {
 
-      if ( !instance.data.disabled[ plugin ] ) {
+      if ( instance.data.disabled[ plugin ] ) {
+        return;
+      }
 
-        instance.data.disabled[ plugin ] = true;
+      instance.data.disabled[ plugin ] = true;
+
+      if ( plugin in Popcorn.registryByName &&
+           instance.data.running[ plugin ] ) {
 
         for ( var i = instance.data.running[ plugin ].length - 1, event; i >= 0; i-- ) {
 
@@ -455,9 +460,14 @@
     },
     enable: function( instance, plugin ) {
 
-      if ( instance.data.disabled[ plugin ] ) {
+      if ( !instance.data.disabled[ plugin ] ) {
+        return;
+      }
 
-        instance.data.disabled[ plugin ] = false;
+      instance.data.disabled[ plugin ] = false;
+
+      if ( plugin in Popcorn.registryByName &&
+           instance.data.running[ plugin ] ) {
 
         for ( var i = instance.data.running[ plugin ].length - 1, event; i >= 0; i-- ) {
 
@@ -915,10 +925,22 @@
         return this;
       },
       unlisten: function( type, fn ) {
+        var events = this.data.events[ type ];
 
-        if ( this.data.events[ type ] && this.data.events[ type ][ fn ] ) {
+        if ( !events ) {
+          return; // no listeners = nothing to do
+        }
 
-          delete this.data.events[ type ][ fn ];
+        if ( typeof fn === "string" && events[ fn ] ) {
+          delete events[ fn ];
+
+          return this;
+        } else if ( typeof fn === "function" ) {
+          for ( var i in events ) {
+            if ( hasOwn.call( events, i ) && events[ i ] === fn ) {
+              delete events[ i ];
+            }
+          }
 
           return this;
         }
@@ -1003,7 +1025,14 @@
       obj.data.history.push( track._id );
 
       // Trigger _setup method if exists
-      track._natives._setup && track._natives._setup.call( this, track );
+      if ( track._natives._setup ) {
+
+        track._natives._setup.call( obj, track );
+        obj.emit( "tracksetup", Popcorn.extend( {}, track, {
+          plugin: track._natives.type,
+          type: "tracksetup"
+        }));
+      }
     }
 
     track.start = Popcorn.util.toSeconds( track.start, obj.options.framerate );
@@ -1592,6 +1621,15 @@
           runningPlugins.splice( runningPlugins.indexOf( options ), 1 ) &&
           natives.end.apply( this, args );
       }, natives._teardown );
+
+      // extend teardown to always trigger trackteardown after teardown
+      natives._teardown = combineFn( natives._teardown, function() {
+
+        this.emit( "trackteardown", Popcorn.extend( {}, options, {
+          plugin: name,
+          type: "trackteardown"
+        }));
+      });
 
       // default to an empty string if no effect exists
       // split string into an array of effects
