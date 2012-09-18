@@ -238,21 +238,21 @@
             impl.readyState = self.HAVE_ENOUGH_DATA;
             self.dispatchEvent( "canplaythrough" );
 
-            var i = playerReadyCallbacks.length;
-            while( i-- ) {
-              playerReadyCallbacks[ i ]();
-              delete playerReadyCallbacks[ i ];
-            }
-
             // Pause video if we aren't auto-starting
             if( !impl.autoplay ) {
               console.log('no autoplay');
-              self.pause();
               actionQueue.next();
+              self.pause();
             } else {
               console.log('autoplay');
               // This is a real play as well as a ready event
               onPlay();
+            }
+
+            var i = playerReadyCallbacks.length;
+            while( i-- ) {
+              playerReadyCallbacks[ i ]();
+              delete playerReadyCallbacks[ i ];
             }
           } else {
             onPlay();
