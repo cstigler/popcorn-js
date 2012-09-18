@@ -127,6 +127,8 @@
 
     function onPlayerReady( event ) {
       playerReady = true;
+      self.play();
+      console.log('ready!');
     }
 
     // YouTube sometimes sends a duration of 0.  From the docs:
@@ -218,7 +220,9 @@
 
         // playing
         case YT.PlayerState.PLAYING:
+          console.log('stateChange to PLAYING');
           if( firstPlay ) {
+            console.log('firstPlay!');
             firstPlay = false;
 
             // XXX: this should really live in cued below, but doesn't work.
@@ -234,21 +238,22 @@
             impl.readyState = self.HAVE_ENOUGH_DATA;
             self.dispatchEvent( "canplaythrough" );
 
-            // Pause video if we aren't auto-starting
-            if( !impl.autoplay ) {
-              self.pause();
-            } else {
-              // This is a real play as well as a ready event
-              onPlay();
-            }
-
             var i = playerReadyCallbacks.length;
             while( i-- ) {
               playerReadyCallbacks[ i ]();
               delete playerReadyCallbacks[ i ];
             }
 
-            actionQueue.next();
+            // Pause video if we aren't auto-starting
+            if( !impl.autoplay ) {
+              console.log('no autoplay');
+              self.pause();
+              actionQueue.next();
+            } else {
+              console.log('autoplay');
+              // This is a real play as well as a ready event
+              onPlay();
+            }
           } else {
             onPlay();
           }
@@ -491,6 +496,7 @@
     }
 
     self.pause = function() {
+      console.log('self.puase')
       if( !playerReady ) {
         addPlayerReadyCallback( function() { self.pause(); } );
         return;
@@ -499,7 +505,7 @@
       actionQueue.add(function() {
         if ( player.getPlayerState() !== 2 ) {
           seeking = false;
-          player.playVideo();
+          player.pauseVideo();
         } else {
           actionQueue.next();
         }
