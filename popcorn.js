@@ -834,7 +834,8 @@
       trigger: function( type, data ) {
         var eventInterface,
             evt,
-            events = this.data.events[ type ];
+            events = this.data.events[ type ],
+            clonedEvents;
 
         //  setup checks for custom event system
         if ( events ) {
@@ -850,14 +851,11 @@
           }
 
           // clone events in case callbacks remove callbacks themselves
-          var clonedEvents = events.slice( 0 );
+          clonedEvents = events.slice();
 
-          for ( var i = 0; i < clonedEvents.length; i++ ) {
-            var cb = clonedEvents[ i ];
-
-            if ( typeof cb === "function" ) {
-              cb.call( this, data );
-            }
+          // iterate through all callbacks
+          while ( clonedEvents.length ) {
+            clonedEvents.shift().call( this, data );
           }
         }
 
@@ -868,6 +866,7 @@
             hasEvents = true,
             eventHook = Popcorn.events.hooks[ type ],
             origType = type,
+            clonedEvents,
             tmp;
 
         // Setup event registry entry
@@ -897,6 +896,16 @@
               eventHook.handler.call( self, event, tmp );
             };
           }
+          
+          // assume the piggy back event is registered
+          hasEvents = true;
+          
+          // Setup event registry entry
+          if ( !this.data.events[ type ] ) {
+            this.data.events[ type ] = [];
+            // Toggle if the previous assumption was untrue
+            hasEvents = false;
+          }
         }
 
         //  Register event and handler
@@ -906,21 +915,19 @@
         if ( !hasEvents && Popcorn.events.all.indexOf( type ) > -1 ) {
           this.media.addEventListener( type, function( event ) {
             // clone events in case callbacks remove callbacks themselves
-            var clonedEvents = self.data.events[ type ].slice( 0 );
+            clonedEvents = self.data.events[ type ].slice();
 
-            for ( var i = 0; i < clonedEvents.length; i++ ) {
-              var cb = clonedEvents[ i ];
-
-              if ( typeof cb === "function" ) {
-                cb.call( self, event );
-              }
+            // iterate through all callbacks
+            while ( clonedEvents.length ) {
+              clonedEvents.shift().call( self, event );
             }
           }, false );
         }
         return this;
       },
       unlisten: function( type, fn ) {
-        var events = this.data.events[ type ];
+        var ind,
+            events = this.data.events[ type ];
 
         if ( !events ) {
           return; // no listeners = nothing to do
@@ -930,13 +937,13 @@
           // legacy support for string-based removal -- not recommended
           for ( var i = 0; i < events.length; i++ ) {
             if ( events[ i ].name === fn ) {
-              events.splice( i--, 1 ); // decrement i because array length just got smaller
+              // decrement i because array length just got smaller
+              events.splice( i--, 1 );
             }
           }
 
           return this;
         } else if ( typeof fn === "function" ) {
-          var ind;
           while( ind !== -1 ) {
             ind = events.indexOf( fn );
             events.splice( ind, 1 );
