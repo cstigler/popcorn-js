@@ -867,6 +867,10 @@
             clonedEvents,
             tmp;
 
+        if ( typeof fn !== "function" ) {
+          throw new Error( "Popcorn.js Error: Listener is not a function" );
+        }
+
         // Setup event registry entry
         if ( !this.data.events[ type ] ) {
           this.data.events[ type ] = [];
