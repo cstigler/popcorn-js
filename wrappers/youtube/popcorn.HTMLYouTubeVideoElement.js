@@ -131,7 +131,6 @@
     function onPlayerReady( event ) {
       playerReady = true;
       self.play();
-      console.log('ready!');
     }
 
     // YouTube sometimes sends a duration of 0.  From the docs:
@@ -214,37 +213,6 @@
 
         // unstarted
         case -1:
-          // XXX: this should really live in cued below, but doesn't work.
-          impl.readyState = self.HAVE_METADATA;
-          self.dispatchEvent( "loadedmetadata" );
-          if (!playerReady) {
-            addPlayerReadyCallback( function() {
-              bufferedInterval = setInterval( monitorBuffered, 50 );
-            });
-          } else {
-            bufferedInterval = setInterval( monitorBuffered, 50 );
-          }
-
-          self.dispatchEvent( "loadeddata" );
-
-          impl.readyState = self.HAVE_FUTURE_DATA;
-          self.dispatchEvent( "canplay" );
-
-          // We can't easily determine canplaythrough, but will send anyway.
-          impl.readyState = self.HAVE_ENOUGH_DATA;
-          self.dispatchEvent( "canplaythrough" );
-
-          // Auto-start if necessary
-          if( impl.autoplay ) {
-            self.play();
-          }
-
-          var i = playerReadyCallbacks.length;
-          while( i-- ) {
-            playerReadyCallbacks[ i ]();
-            delete playerReadyCallbacks[ i ];
-          }
-
           break;
 
         // ended
@@ -254,14 +222,19 @@
 
         // playing
         case YT.PlayerState.PLAYING:
-          console.log('stateChange to PLAYING');
           if( firstPlay ) {
-            console.log('firstPlay!');
             firstPlay = false;
 
             // XXX: this should really live in cued below, but doesn't work.
             impl.readyState = self.HAVE_METADATA;
             self.dispatchEvent( "loadedmetadata" );
+            if (!playerReady) {
+              addPlayerReadyCallback( function() {
+                bufferedInterval = setInterval( monitorBuffered, 50 );
+              });
+            } else {
+              bufferedInterval = setInterval( monitorBuffered, 50 );
+            }
 
             self.dispatchEvent( "loadeddata" );
 
@@ -274,11 +247,9 @@
 
             // Pause video if we aren't auto-starting
             if( !impl.autoplay ) {
-              console.log('no autoplay');
               actionQueue.next();
               self.pause();
             } else {
-              console.log('autoplay');
               // This is a real play as well as a ready event
               onPlay();
             }
@@ -555,7 +526,6 @@
     }
 
     self.pause = function() {
-      console.log('self.puase')
       if( !playerReady ) {
         addPlayerReadyCallback( function() { self.pause(); } );
         return;
