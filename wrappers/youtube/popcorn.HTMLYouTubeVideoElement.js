@@ -228,6 +228,7 @@
             // XXX: this should really live in cued below, but doesn't work.
             impl.readyState = self.HAVE_METADATA;
             self.dispatchEvent( "loadedmetadata" );
+<<<<<<< HEAD
             if (!playerReady) {
               addPlayerReadyCallback( function() {
                 bufferedInterval = setInterval( monitorBuffered, 50 );
@@ -235,6 +236,8 @@
             } else {
               bufferedInterval = setInterval( monitorBuffered, 50 );
             }
+=======
+>>>>>>> t1280
 
             self.dispatchEvent( "loadeddata" );
 
@@ -495,10 +498,13 @@
       }
       
       actionQueue.next();
+<<<<<<< HEAD
     }
 
     function onProgress() {
       self.dispatchEvent( "progress" );
+=======
+>>>>>>> t1280
     }
 
     self.play = function() {
