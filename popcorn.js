@@ -914,12 +914,14 @@
         // only attach one event of any type
         if ( !hasEvents && Popcorn.events.all.indexOf( type ) > -1 ) {
           this.media.addEventListener( type, function( event ) {
-            // clone events in case callbacks remove callbacks themselves
-            clonedEvents = self.data.events[ type ].slice();
+            if ( self.data.events[ type ] ) {
+              // clone events in case callbacks remove callbacks themselves
+              clonedEvents = self.data.events[ type ].slice();
 
-            // iterate through all callbacks
-            while ( clonedEvents.length ) {
-              clonedEvents.shift().call( self, event );
+              // iterate through all callbacks
+              while ( clonedEvents.length ) {
+                clonedEvents.shift().call( self, event );
+              }
             }
           }, false );
         }
