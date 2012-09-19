@@ -248,7 +248,7 @@
             // Pause video if we aren't auto-starting
             if( !impl.autoplay ) {
               actionQueue.next();
-              self.pause();
+              player.pauseVideo();
             } else {
               // This is a real play as well as a ready event
               onPlay();
