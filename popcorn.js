@@ -948,7 +948,9 @@
         } else if ( typeof fn === "function" ) {
           while( ind !== -1 ) {
             ind = events.indexOf( fn );
-            events.splice( ind, 1 );
+            if ( ind !== -1 ) {
+              events.splice( ind, 1 );
+            }
           }
 
           return this;
