@@ -3,6 +3,7 @@
   var
 
   CURRENT_TIME_MONITOR_MS = 10,
+  SEEK_MONITOR_MS = 250,
   EMPTY_STRING = "",
 
   // YouTube suggests 200x200 as minimum, video spec says 300x150.
@@ -87,8 +88,9 @@
       player,
       playerReadyCallbacks = [],
       currentTimeInterval,
-      seekEps = 0.15,
+      seekEps = 0.1,
       timeUpdateInterval,
+      seekMonitorInterval,
       forcedLoadMetadata = false;
 
     // Namespace all events we'll produce
@@ -350,18 +352,23 @@
           onSeeking();
           onSeeked();
         }
-      } else if ( impl.currentTime >= playerTime - seekEps && impl.currentTime <= playerTime + seekEps ) {
-        // seek succeeded
-        onSeeked();
-      } else {
-        // seek failed, try again with higher tolerance
-        seekEps *= 2;
-        player.seekTo ( impl.currentTime );
       }
     }
 
-    function getCurrentTime() {
-      return impl.currentTime;
+    // we don't need to monitor seeks as often as currentTime, so a different loop is better
+    function monitorSeek() {
+      var playerTime = player.getCurrentTime();
+
+      if ( impl.seeking ) {
+        if ( impl.currentTime >= playerTime - seekEps && impl.currentTime <= playerTime + seekEps ) {
+          // seek succeeded
+          onSeeked();
+        } else {
+          // seek failed, try again with higher tolerance
+          seekEps *= 2;
+          player.seekTo ( impl.currentTime );
+        }
+      }
     }
 
     function changeCurrentTime( aTime ) {
@@ -388,6 +395,10 @@
     function onSeeking() {
       impl.seeking = true;
       self.dispatchEvent( "seeking" );
+
+      if ( !seekMonitorInterval ) {
+        seekMonitorInterval = setInterval( monitorSeek, SEEK_MONITOR_MS );
+      }
     }
 
     function onSeeked() {
@@ -397,6 +408,7 @@
       self.dispatchEvent( "seeked" );
       self.dispatchEvent( "canplay" );
       self.dispatchEvent( "canplaythrough" );
+      clearInterval( seekMonitorInterval );
     }
 
     function onPlay() {
@@ -549,7 +561,7 @@
 
       currentTime: {
         get: function() {
-          return getCurrentTime();
+          return impl.currentTime;
         },
         set: function( aValue ) {
           changeCurrentTime( aValue );
