@@ -478,6 +478,7 @@
       self.dispatchEvent( "canplay" );
       self.dispatchEvent( "canplaythrough" );
       clearInterval( seekMonitorInterval );
+      seekMonitorInterval = null;
     }
 
     function onPlay() {
@@ -538,6 +539,7 @@
     function onPause() {
       impl.paused = true;
       clearInterval( timeUpdateInterval );
+      timeUpdateInterval = null;
       self.dispatchEvent( "pause" );
       
       actionQueue.next();
