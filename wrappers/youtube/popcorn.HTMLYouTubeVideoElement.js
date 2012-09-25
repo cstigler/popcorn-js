@@ -405,7 +405,6 @@
       }
     }
 
-<<<<<<< HEAD
     function monitorBuffered() {
       var fraction = player.getVideoLoadedFraction();
 
@@ -419,10 +418,6 @@
         }
       }
     }
-
-    function getCurrentTime() {
-      if( !playerReady ) {
-        return 0;
 
     // we don't need to monitor seeks as often as currentTime, so a different loop is better
     function monitorSeek() {
