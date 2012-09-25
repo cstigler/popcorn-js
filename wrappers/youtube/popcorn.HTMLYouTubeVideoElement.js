@@ -116,7 +116,7 @@
       seekEps = 0.1,
       timeUpdateInterval,
       firstPlay = true,
-      actionQueue = callbackQueue();
+      actionQueue = callbackQueue(),
       seekMonitorInterval,
       forcedLoadMetadata = false;
 
