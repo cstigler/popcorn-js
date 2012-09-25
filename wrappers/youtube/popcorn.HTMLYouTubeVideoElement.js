@@ -3,6 +3,7 @@
   var
 
   CURRENT_TIME_MONITOR_MS = 10,
+  SEEK_MONITOR_MS = 250,
   EMPTY_STRING = "",
 
   // YouTube suggests 200x200 as minimum, video spec says 300x150.
@@ -112,12 +113,12 @@
       bufferedInterval,
       lastLoadedFraction = 0,
       currentTimeInterval,
-      lastCurrentTime = 0,
-      seekTarget = -1,
+      seekEps = 0.1,
       timeUpdateInterval,
-      forcedLoadMetadata = false,
       firstPlay = true,
       actionQueue = callbackQueue();
+      seekMonitorInterval,
+      forcedLoadMetadata = false;
 
     // Namespace all events we'll produce
     self._eventNamespace = Popcorn.guid( "HTMLYouTubeVideoElement::" );
@@ -390,25 +391,21 @@
     }
 
     function monitorCurrentTime() {
-      var currentTime = impl.currentTime = player.getCurrentTime();
+      var playerTime = player.getCurrentTime();
 
-      // See if the user seeked the video via controls
-      if( !impl.seeking && ABS( lastCurrentTime - currentTime ) > CURRENT_TIME_MONITOR_MS ) {
-        onSeeking();
-        onSeeked();
-      }
+      if ( !impl.seeking ) {
+        impl.currentTime = playerTime;
 
-      // See if we had a pending seek via code.  YouTube drops us within
-      // 1 second of our target time, so we have to round a bit, or miss
-      // many seek ends.
-      if( ( seekTarget > -1 ) &&
-          ( ABS( currentTime - seekTarget ) < 1 ) ) {
-        seekTarget = -1;
-        onSeeked();
+        // the multiplication by two is just to give a tiny bit of leeway, since JS events are imprecise
+        if( ABS( impl.currentTime - playerTime ) > CURRENT_TIME_MONITOR_MS * 2 ) {
+          // User seeked the video via controls
+          onSeeking();
+          onSeeked();
+        }
       }
-      lastCurrentTime = impl.currentTime;
     }
 
+<<<<<<< HEAD
     function monitorBuffered() {
       var fraction = player.getVideoLoadedFraction();
 
@@ -426,10 +423,21 @@
     function getCurrentTime() {
       if( !playerReady ) {
         return 0;
-      }
 
-      impl.currentTime = player.getCurrentTime();
-      return impl.currentTime;
+    // we don't need to monitor seeks as often as currentTime, so a different loop is better
+    function monitorSeek() {
+      var playerTime = player.getCurrentTime();
+
+      if ( impl.seeking ) {
+        if ( impl.currentTime >= playerTime - seekEps && impl.currentTime <= playerTime + seekEps ) {
+          // seek succeeded
+          onSeeked();
+        } else {
+          // seek failed, try again with higher tolerance
+          seekEps *= 2;
+          player.seekTo ( impl.currentTime );
+        }
+      }
     }
 
     function changeCurrentTime( aTime ) {
@@ -437,6 +445,13 @@
         addPlayerReadyCallback( function() { changeCurrentTime( aTime ); } );
         return;
       }
+
+      aTime = Number( aTime );
+      if ( isNaN ( aTime ) ) {
+        return;
+      }
+
+      impl.currentTime = aTime;
 
       onSeeking( aTime );
       player.seekTo( aTime );
@@ -446,10 +461,7 @@
       self.dispatchEvent( "timeupdate" );
     }
 
-    function onSeeking( target ) {
-      if( target !== undefined ) {
-        seekTarget = target;
-      }
+    function onSeeking() {
       impl.seeking = true;
       self.dispatchEvent( "seeking" );
       
@@ -457,14 +469,20 @@
       if ( !currentTimeInterval ) {
         currentTimeInterval = setInterval( monitorCurrentTime, CURRENT_TIME_MONITOR_MS );
       }
+
+      if ( !seekMonitorInterval ) {
+        seekMonitorInterval = setInterval( monitorSeek, SEEK_MONITOR_MS );
+      }
     }
 
     function onSeeked() {
       impl.seeking = false;
+      seekEps = 0.15;
       self.dispatchEvent( "timeupdate" );
       self.dispatchEvent( "seeked" );
       self.dispatchEvent( "canplay" );
       self.dispatchEvent( "canplaythrough" );
+      clearInterval( seekMonitorInterval );
     }
 
     function onPlay() {
@@ -651,7 +669,7 @@
 
       currentTime: {
         get: function() {
-          return getCurrentTime();
+          return impl.currentTime;
         },
         set: function( aValue ) {
           changeCurrentTime( aValue );
