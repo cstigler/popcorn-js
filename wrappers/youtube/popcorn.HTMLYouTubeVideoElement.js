@@ -87,8 +87,7 @@
       player,
       playerReadyCallbacks = [],
       currentTimeInterval,
-      lastCurrentTime = 0,
-      seekTarget = -1,
+      seekEps = 0.15,
       timeUpdateInterval,
       forcedLoadMetadata = false;
 
@@ -340,31 +339,28 @@
     }
 
     function monitorCurrentTime() {
-      var currentTime = impl.currentTime = player.getCurrentTime();
+      var playerTime = player.getCurrentTime();
 
-      // See if the user seeked the video via controls
-      if( !impl.seeking && ABS( lastCurrentTime - currentTime ) > CURRENT_TIME_MONITOR_MS ) {
-        onSeeking();
-        onSeeked();
-      }
+      if ( !impl.seeking ) {
+        impl.currentTime = playerTime;
 
-      // See if we had a pending seek via code.  YouTube drops us within
-      // 1 second of our target time, so we have to round a bit, or miss
-      // many seek ends.
-      if( ( seekTarget > -1 ) &&
-          ( ABS( currentTime - seekTarget ) < 1 ) ) {
-        seekTarget = -1;
+        // the multiplication by two is just to give a tiny bit of leeway, since JS events are imprecise
+        if( ABS( impl.currentTime - playerTime ) > CURRENT_TIME_MONITOR_MS * 2 ) {
+          // User seeked the video via controls
+          onSeeking();
+          onSeeked();
+        }
+      } else if ( impl.currentTime >= playerTime - seekEps && impl.currentTime <= playerTime + seekEps ) {
+        // seek succeeded
         onSeeked();
+      } else {
+        // seek failed, try again with higher tolerance
+        seekEps *= 2;
+        player.seekTo ( impl.currentTime );
       }
-      lastCurrentTime = impl.currentTime;
     }
 
     function getCurrentTime() {
-      if( !playerReady ) {
-        return 0;
-      }
-
-      impl.currentTime = player.getCurrentTime();
       return impl.currentTime;
     }
 
@@ -374,6 +370,13 @@
         return;
       }
 
+      aTime = Number( aTime );
+      if ( isNaN ( aTime ) ) {
+        return;
+      }
+
+      impl.currentTime = aTime;
+
       onSeeking( aTime );
       player.seekTo( aTime );
     }
@@ -382,16 +385,14 @@
       self.dispatchEvent( "timeupdate" );
     }
 
-    function onSeeking( target ) {
-      if( target !== undefined ) {
-        seekTarget = target;
-      }
+    function onSeeking() {
       impl.seeking = true;
       self.dispatchEvent( "seeking" );
     }
 
     function onSeeked() {
       impl.seeking = false;
+      seekEps = 0.15;
       self.dispatchEvent( "timeupdate" );
       self.dispatchEvent( "seeked" );
       self.dispatchEvent( "canplay" );
