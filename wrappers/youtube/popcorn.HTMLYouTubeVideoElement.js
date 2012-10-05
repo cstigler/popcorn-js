@@ -571,6 +571,13 @@
         },
         set: function( aValue ) {
           impl.width = aValue;
+          if (elem) {
+            elem.width = aValue;
+          }
+
+          if( playerReady ) {
+              player.setSize( impl.width, impl.height );
+          }
         }
       },
 
@@ -580,6 +587,13 @@
         },
         set: function( aValue ) {
           impl.height = aValue;
+          if (elem) {
+            elem.height = aValue;
+          }
+
+          if( playerReady ) {
+              player.setSize( impl.width, impl.height );
+          }
         }
       },
 
