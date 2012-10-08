@@ -87,6 +87,8 @@
       player,
       playerReadyCallbacks = [],
       playerState = -1,
+      stateMonitors = {},
+      stateMonitorTimeout,
       bufferedInterval,
       lastLoadedFraction = 0,
       currentTimeInterval,
@@ -263,6 +265,10 @@
       }
       clearInterval( currentTimeInterval );
       clearInterval( bufferedInterval );
+      clearTimeout( stateMonitorTimeout );
+      Popcorn.forEach( stateMonitors, function(obj, i) {
+        delete stateMonitors[i];
+      });
       player.stopVideo();
       player.clearVideo();
 
@@ -356,6 +362,52 @@
       // and can dispatch durationchange.
       forcedLoadMetadata = false;
       getDuration();
+    }
+
+    function monitorState() {
+      var finished = true;
+
+      Popcorn.forEach( stateMonitors, function(change, i) {
+        change = stateMonitors[ i ];
+
+        if ( typeof player[i] !== 'function' ) {
+
+          delete stateMonitors[i];
+          return;
+
+        }
+
+        if ( player[i]() !== change.val ) {
+
+          self.dispatchEvent( change.evt );
+          delete stateMonitors[i];
+          return;
+
+        }
+
+        finished = false;
+      });
+
+      if (finished) {
+        stateMonitorTimeout = false;
+      } else {
+        stateMonitorTimeout = setTimeout( monitorState, 10 );
+      }
+    }
+
+    function changeState(playerHook, value, eventName) {
+      if (stateMonitors[playerHook]) {
+        return;
+      }
+
+      stateMonitors[playerHook] = {
+        val: value,
+        evt: eventName
+      };
+
+      if (!stateMonitorTimeout) {
+        stateMonitorTimeout = setTimeout(monitorState);
+      }
     }
 
     function monitorCurrentTime() {
@@ -501,15 +553,15 @@
     }
 
     function setVolume( aValue ) {
+      impl.volume = aValue;
       if( !playerReady ) {
-        impl.volume = aValue;
         addPlayerReadyCallback( function() {
           setVolume( impl.volume );
         });
         return;
       }
+      changeState( "getVolume", player.getVolume(), "volumechange" );
       player.setVolume( aValue );
-      self.dispatchEvent( "volumechange" );
     }
 
     function getVolume() {
@@ -520,13 +572,13 @@
     }
 
     function setMuted( aValue ) {
+      impl.muted = aValue;
       if( !playerReady ) {
-        impl.muted = aValue;
         addPlayerReadyCallback( function() { setMuted( impl.muted ); } );
         return;
       }
+      changeState( "isMuted", player.isMuted(), "volumechange" );
       player[ aValue ? "mute" : "unMute" ]();
-      self.dispatchEvent( "volumechange" );
     }
 
     function getMuted() {
