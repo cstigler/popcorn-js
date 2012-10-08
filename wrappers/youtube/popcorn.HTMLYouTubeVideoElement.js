@@ -189,19 +189,19 @@
     }
 
     function onPlayerStateChange( event ) {
-      switch( event.data ) {
+      function updateDuration() {
+        var i;
 
-        // unstarted
-        case -1:
+        if (playerReady && getDuration()) {
           // XXX: this should really live in cued below, but doesn't work.
           impl.readyState = self.HAVE_METADATA;
           self.dispatchEvent( "loadedmetadata" );
-          if (!playerReady) {
-            addPlayerReadyCallback( function() {
-              bufferedInterval = setInterval( monitorBuffered, 50 );
-            });
-          } else {
-            bufferedInterval = setInterval( monitorBuffered, 50 );
+          bufferedInterval = setInterval( monitorBuffered, 50 );
+
+          i = playerReadyCallbacks.length;
+          while( i-- ) {
+            playerReadyCallbacks[ i ]();
+            delete playerReadyCallbacks[ i ];
           }
 
           self.dispatchEvent( "loadeddata" );
@@ -217,12 +217,17 @@
           if( impl.autoplay ) {
             self.play();
           }
+          return;
+        }
 
-          var i = playerReadyCallbacks.length;
-          while( i-- ) {
-            playerReadyCallbacks[ i ]();
-            delete playerReadyCallbacks[ i ];
-          }
+        setTimeout( updateDuration, 50 );
+      }
+
+      switch( event.data ) {
+
+        // unstarted
+        case -1:
+          updateDuration();
 
           break;
 
