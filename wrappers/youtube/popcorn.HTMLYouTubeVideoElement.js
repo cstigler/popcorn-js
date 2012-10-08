@@ -508,7 +508,9 @@
 
         // Only 1 play when video.loop=true
         if ( impl.loop ) {
-          self.dispatchEvent( "play" );
+          setTimeout(function() {
+            self.dispatchEvent( "play" );
+          }, 10);
         }
       }
 
