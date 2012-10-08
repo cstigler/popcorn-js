@@ -489,6 +489,11 @@
     }
 
     function onPlay() {
+      if (impl.seeking && impl.paused) {
+        player.pauseVideo();
+        return;
+      }
+
       // We've called play once (maybe through autoplay),
       // no need to force it from now on.
       forcedLoadMetadata = true;
