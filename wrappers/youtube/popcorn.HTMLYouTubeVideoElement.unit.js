@@ -67,6 +67,7 @@ var testData = {
       video.height = 240;
 
       video.addEventListener( "play", function onPlay() {
+        var container = document.getElementById('video');
         video.removeEventListener( "play", onPlay, false );
         video.width = 640;
         video.height = 480;
@@ -75,8 +76,8 @@ var testData = {
         equal( video.width, 640, "Video width is set" );
         equal( video.height, 480, "Video height is set" );
 
-        equal( video.lastChild.width, 640, "Video iframe width is set" );
-        equal( video.lastChild.height, 480, "Video iframe height is set" );
+        equal( container.lastChild.width, 640, "Video iframe width is set" );
+        equal( container.lastChild.height, 480, "Video iframe height is set" );
         start();
       }, false);
 
