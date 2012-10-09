@@ -684,7 +684,7 @@
 
       paused: {
         get: function() {
-          return player.getPlayerState() === 2;
+          return impl.paused;
         }
       },
 
