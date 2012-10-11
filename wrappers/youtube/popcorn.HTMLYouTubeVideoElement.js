@@ -464,6 +464,10 @@
         return;
       }
 
+      if ( !currentTimeInterval ) {
+        currentTimeInterval = setInterval( monitorCurrentTime,
+                                           CURRENT_TIME_MONITOR_MS ) ;
+      }
       onSeeking( aTime );
       player.seekTo( aTime );
     }
