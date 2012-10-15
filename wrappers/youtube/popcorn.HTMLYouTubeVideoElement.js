@@ -223,16 +223,11 @@
         updateDurationTimeout = setTimeout( updateDuration, 50 );
       }
 
+      if ( !updateDurationTimeout ) {
+        updateDuration();
+      }
+
       switch( event.data ) {
-
-        // unstarted
-        case -1:
-          if ( !updateDurationTimeout ) {
-            updateDuration();
-          }
-
-          break;
-
         // ended
         case YT.PlayerState.ENDED:
           onEnded();
