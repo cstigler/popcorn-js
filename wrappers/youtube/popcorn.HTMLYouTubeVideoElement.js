@@ -223,7 +223,7 @@
         updateDurationTimeout = setTimeout( updateDuration, 50 );
       }
 
-      if ( !updateDurationTimeout ) {
+      if ( !updateDurationTimeout && !impl.readyState ) {
         updateDuration();
       }
 
