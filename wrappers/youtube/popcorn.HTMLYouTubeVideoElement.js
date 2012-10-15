@@ -89,6 +89,7 @@
       playerState = -1,
       stateMonitors = {},
       stateMonitorTimeout,
+      updateDurationTimeout,
       bufferedInterval,
       lastLoadedFraction = 0,
       currentTimeInterval,
@@ -190,7 +191,7 @@
 
     function onPlayerStateChange( event ) {
       function updateDuration() {
-        var i;
+        var fn;
 
         if (playerReady && getDuration()) {
           // XXX: this should really live in cued below, but doesn't work.
@@ -198,10 +199,9 @@
           self.dispatchEvent( "loadedmetadata" );
           bufferedInterval = setInterval( monitorBuffered, 50 );
 
-          i = playerReadyCallbacks.length;
-          while( i-- ) {
-            playerReadyCallbacks[ i ]();
-            delete playerReadyCallbacks[ i ];
+          while( playerReadyCallbacks.length ) {
+            fn = playerReadyCallbacks.pop();
+            fn();
           }
 
           self.dispatchEvent( "loadeddata" );
@@ -220,14 +220,16 @@
           return;
         }
 
-        setTimeout( updateDuration, 50 );
+        updateDurationTimeout = setTimeout( updateDuration, 50 );
       }
 
       switch( event.data ) {
 
         // unstarted
         case -1:
-          updateDuration();
+          if ( !updateDurationTimeout ) {
+            updateDuration();
+          }
 
           break;
 
@@ -275,6 +277,7 @@
       clearInterval( currentTimeInterval );
       clearInterval( bufferedInterval );
       clearTimeout( stateMonitorTimeout );
+      clearTimeout( updateDurationTimeout );
       Popcorn.forEach( stateMonitors, function(obj, i) {
         delete stateMonitors[i];
       });
