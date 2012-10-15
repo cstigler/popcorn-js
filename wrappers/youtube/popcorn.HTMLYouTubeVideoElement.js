@@ -264,6 +264,10 @@
       playerState = event.data;
     }
 
+    function onPlaybackQualityChange ( event ) {
+      self.dispatchEvent( "playbackqualitychange" );
+    }
+
     function destroyPlayer() {
       if( !( playerReady && player ) ) {
         return;
@@ -355,7 +359,8 @@
         events: {
           'onReady': onPlayerReady,
           'onError': onPlayerError,
-          'onStateChange': onPlayerStateChange
+          'onStateChange': onPlayerStateChange,
+          'onPlaybackQualityChange': onPlaybackQualityChange,
         }
       });
 
@@ -781,6 +786,28 @@
         }
       }
     });
+
+    self._util.getPlaybackQuality = function() {
+      return playerReady && player.getPlaybackQuality() || impl.quality || 'default';
+    };
+
+    self._util.setPlaybackQuality = function( quality ) {
+      impl.quality = quality;
+
+      if( !playerReady ) {
+        addPlayerReadyCallback( function() {
+          player.setPlaybackQuality( impl.quality );
+        });
+        return;
+      }
+
+      player.setPlaybackQuality( quality );
+    };
+
+    self._util.getAvailableQualityLevels = function() {
+      return playerReady && player.getAvailableQualityLevels() || [];
+    };
+
   }
 
   HTMLYouTubeVideoElement.prototype = new Popcorn._MediaElementProto();
