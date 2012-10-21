@@ -86,6 +86,7 @@
       playerReady = false,
       player,
       playerReadyCallbacks = [],
+      metadataReadyCallbacks = [],
       playerState = -1,
       stateMonitors = {},
       stateMonitorTimeout,
@@ -107,11 +108,25 @@
     self._util.type = "YouTube";
 
     function addPlayerReadyCallback( callback ) {
-      playerReadyCallbacks.unshift( callback );
+      if ( playerReadyCallbacks.indexOf( callback ) < 0 ) {
+        playerReadyCallbacks.unshift( callback );
+      }
+    }
+
+    function addMetadataReadyCallback( callback ) {
+      if ( metadataReadyCallbacks.indexOf( callback ) < 0 ) {
+        metadataReadyCallbacks.unshift( callback );
+      }
     }
 
     function onPlayerReady( event ) {
-      playerReady = true;
+      if ( player === event.target ) {
+        playerReady = true;
+        while( playerReadyCallbacks.length ) {
+          fn = playerReadyCallbacks.pop();
+          fn();
+        }
+      }
     }
 
     // YouTube sometimes sends a duration of 0.  From the docs:
@@ -128,7 +143,7 @@
     function getDuration() {
       if( !playerReady ) {
         // Queue a getDuration() call so we have correct duration info for loadedmetadata
-        addPlayerReadyCallback( function() { getDuration(); } );
+        addPlayerReadyCallback( getDuration );
         return impl.duration;
       }
 
@@ -193,14 +208,14 @@
       function updateDuration() {
         var fn;
 
-        if (playerReady && getDuration()) {
+        if ( !impl.readyState && playerReady && getDuration() ) {
           // XXX: this should really live in cued below, but doesn't work.
           impl.readyState = self.HAVE_METADATA;
           self.dispatchEvent( "loadedmetadata" );
           bufferedInterval = setInterval( monitorBuffered, 50 );
 
-          while( playerReadyCallbacks.length ) {
-            fn = playerReadyCallbacks.pop();
+          while( metadataReadyCallbacks.length ) {
+            fn = metadataReadyCallbacks.pop();
             fn();
           }
 
@@ -220,12 +235,12 @@
           return;
         }
 
-        updateDurationTimeout = setTimeout( updateDuration, 50 );
+        if (!updateDurationTimeout) {
+          updateDurationTimeout = setTimeout( updateDuration, 50 );
+        }
       }
 
-      if ( !updateDurationTimeout && !impl.readyState ) {
-        updateDuration();
-      }
+      updateDuration();
 
       switch( event.data ) {
         // ended
@@ -276,10 +291,15 @@
       Popcorn.forEach( stateMonitors, function(obj, i) {
         delete stateMonitors[i];
       });
-      player.stopVideo();
-      player.clearVideo();
 
-      parent.removeChild( elem );
+      player.stopVideo();
+      if ( player.clearVideo ) {
+        player.clearVideo();
+      }
+
+      if ( elem && elem.parentNode ) {
+        elem.parentNode.removeChild( elem );
+      }
       elem = null;
     }
 
@@ -362,6 +382,7 @@
         }
       });
 
+      playerReady = false;
       impl.networkState = self.NETWORK_LOADING;
       self.dispatchEvent( "loadstart" );
       self.dispatchEvent( "progress" );
@@ -463,7 +484,7 @@
 
     function changeCurrentTime( aTime ) {
       if( !playerReady ) {
-        addPlayerReadyCallback( function() { changeCurrentTime( aTime ); } );
+        addMetadataReadyCallback( function() { changeCurrentTime( aTime ); } );
         return;
       }
 
@@ -541,7 +562,7 @@
 
     self.play = function() {
       if( !playerReady ) {
-        addPlayerReadyCallback( function() { self.play(); } );
+        addMetadataReadyCallback( function() { self.play(); } );
         return;
       }
       player.playVideo();
@@ -555,7 +576,7 @@
 
     self.pause = function() {
       if( !playerReady ) {
-        addPlayerReadyCallback( function() { self.pause(); } );
+        addMetadataReadyCallback( function() { self.pause(); } );
         return;
       }
       player.pauseVideo();
@@ -574,7 +595,7 @@
     function setVolume( aValue ) {
       impl.volume = aValue;
       if( !playerReady ) {
-        addPlayerReadyCallback( function() {
+        addMetadataReadyCallback( function() {
           setVolume( impl.volume );
         });
         return;
@@ -593,7 +614,7 @@
     function setMuted( aValue ) {
       impl.muted = aValue;
       if( !playerReady ) {
-        addPlayerReadyCallback( function() { setMuted( impl.muted ); } );
+        addMetadataReadyCallback( function() { setMuted( impl.muted ); } );
         return;
       }
       changeState( "isMuted", player.isMuted(), "volumechange" );
@@ -603,6 +624,10 @@
     function getMuted() {
       // YouTube has isMuted(), but for sync access we use impl.muted
       return impl.muted;
+    }
+
+    function updateSize() {
+      player.setSize( impl.width, impl.height );
     }
 
     Object.defineProperties( self, {
@@ -648,6 +673,8 @@
 
           if( playerReady ) {
               player.setSize( impl.width, impl.height );
+          } else {
+              addPlayerReadyCallback( updateSize );
           }
         }
       },
@@ -664,6 +691,8 @@
 
           if( playerReady ) {
               player.setSize( impl.width, impl.height );
+          } else {
+              addPlayerReadyCallback( updateSize );
           }
         }
       },
@@ -793,7 +822,7 @@
       impl.quality = quality;
 
       if( !playerReady ) {
-        addPlayerReadyCallback( function() {
+        addMetadataReadyCallback( function() {
           player.setPlaybackQuality( impl.quality );
         });
         return;
