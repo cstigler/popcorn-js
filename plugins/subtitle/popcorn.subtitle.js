@@ -6,18 +6,17 @@
       createDefaultContainer = function( context, id ) {
 
         var ctxContainer = context.container = document.createElement( "div" ),
-            extContainer = document.createElement( "div" ),
+            body = document.getElementsByTagName( 'body' )[ 0 ],
             style = ctxContainer.style,
             media = context.media;
 
-        extContainer.style.position = "relative";
-        extContainer.appendChild( ctxContainer );
-
-        // we update sub position regularly in case video is resized
+        // we update sub position regularly in case video is resized/moved
         var updatePosition = function() {
-          // the video element must have height and width defined
-          style.width = media.offsetWidth + "px";
-          style.top = media.offsetHeight - ctxContainer.offsetHeight - 40 + "px";
+          var bcRect = media.getBoundingClientRect();
+          
+          style.width = bcRect.width + "px";
+          style.left = bcRect.left;
+          style.top = bcRect.top + bcRect.height - ctxContainer.offsetHeight - 40 + "px";
 
           setTimeout( updatePosition, 100 );
         };
@@ -30,9 +29,9 @@
         style.fontWeight = "bold";
         style.textAlign = "center";
 
-        updatePosition();
+        body.append( ctxContainer );
 
-        media.parentNode.insertBefore( extContainer, media );
+        updatePosition();
 
         return ctxContainer;
       };
