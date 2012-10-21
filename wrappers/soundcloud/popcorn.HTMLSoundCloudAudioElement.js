@@ -13,8 +13,8 @@
   function isSoundCloudReady() {
     // If the SoundCloud Widget API + JS SDK aren't loaded, do it now.
     if( !scLoaded ) {
-      Popcorn.getScript( "http://w.soundcloud.com/player/api.js", function() {
-        Popcorn.getScript( "http://connect.soundcloud.com/sdk.js", function() {
+      Popcorn.getScript( "//w.soundcloud.com/player/api.js", function() {
+        Popcorn.getScript( "//connect.soundcloud.com/sdk.js", function() {
           scReady = true;
 
           // XXX: SoundCloud won't let us use real URLs with the API,
@@ -60,7 +60,8 @@
         controls: false,
         loop: false,
         poster: EMPTY_STRING,
-        volume: 1,
+        // SC Volume values are 0-100, we remap to 0-1 in volume getter/setter
+        volume: 100,
         muted: 0,
         currentTime: 0,
         duration: NaN,
@@ -81,6 +82,9 @@
     self._eventNamespace = Popcorn.guid( "HTMLSoundCloudAudioElement::" );
 
     self.parentNode = parent;
+
+    // Mark this as SoundCloud
+    self._util.type = "SoundCloud";
 
     function addPlayerReadyCallback( callback ) {
       playerReadyCallbacks.unshift( callback );
@@ -136,6 +140,11 @@
 
       playerReady = true;
       player.getDuration( updateDuration );
+
+      // Apply the current controls state again, since we have
+      // to do one thing for controls=false and loading, and another
+      // for controls=false and loaded.
+      setControls( impl.controls );
     }
 
     // When the player widget is ready, kick-off a play/pause
@@ -161,11 +170,14 @@
         player.bind( SC.Widget.Events.PAUSE, function( data ) {
           player.unbind( SC.Widget.Events.PAUSE );
 
-          // Play/Pause cycle is done, continue loading.
+          // Play/Pause cycle is done, restore volume and continue loading.
+          player.setVolume( 100 );
           onLoaded();
         });
       });
 
+      // Turn down the volume and kick-off a play to force load
+      player.setVolume( 0 );
       player.play();
     }
 
@@ -403,9 +415,10 @@
         elem.mozAllowFullScreen = true;
         elem.allowFullScreen = true;
 
-        parent.appendChild( elem );
         // Apply the current controls state, since iframe wasn't ready yet.
         setControls( impl.controls );
+
+        parent.appendChild( elem );
 
         elem.onload = function() {
           elem.onload = null;
@@ -426,15 +439,6 @@
           "&show_comments=false" +
           "&show_user=false";
       });
-    }
-
-    function onVolume( aValue ) {
-      // Remap from 0..100 to 0..1
-      aValue = aValue / 100;
-      if( impl.volume !== aValue ) {
-        impl.volume = aValue;
-        self.dispatchEvent( "volumechange" );
-      }
     }
 
     function setVolume( aValue ) {
@@ -482,7 +486,19 @@
     function setControls( controls ) {
       // If the iframe elem isn't ready yet, bail.  We'll call again when it is.
       if ( elem ) {
-        elem.style.visibility = controls ? "visible" : "hidden";
+        // Due to loading issues with hidden content, we have to be careful
+        // about how we hide the player when controls=false.  Using opacity:0
+        // will let the content load, but allow mouse events.  When it's totally
+        // loaded we can visibility:hidden + position:absolute it.
+        if ( playerReady ) {
+          elem.style.position = "absolute";
+          elem.style.visibility = controls ? "visible" : "hidden";
+        } else {
+          elem.style.opacity = controls ? "1" : "0";
+          // Try to stop mouse events over the iframe while loading. This won't
+          // work in current Opera or IE, but there's not much I can do
+          elem.style.pointerEvents = controls ? "auto" : "none";
+        }
       }
       impl.controls = controls;
     }

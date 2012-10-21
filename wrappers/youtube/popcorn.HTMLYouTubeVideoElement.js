@@ -125,6 +125,9 @@
 
     self.parentNode = parent;
 
+    // Mark this as YouTube
+    self._util.type = "YouTube";
+
     function addPlayerReadyCallback( callback ) {
       playerReadyCallbacks.unshift( callback );
     }
