@@ -70,7 +70,7 @@
         seeking: false,
         autoplay: EMPTY_STRING,
         preload: EMPTY_STRING,
-        controls: true,
+        controls: false,
         loop: false,
         poster: EMPTY_STRING,
         volume: -1,
@@ -86,6 +86,13 @@
       playerReady = false,
       player,
       playerReadyCallbacks = [],
+      metadataReadyCallbacks = [],
+      playerState = -1,
+      stateMonitors = {},
+      stateMonitorTimeout,
+      updateDurationTimeout,
+      bufferedInterval,
+      lastLoadedFraction = 0,
       currentTimeInterval,
       lastCurrentTime = 0,
       seekTarget = -1,
@@ -101,11 +108,25 @@
     self._util.type = "YouTube";
 
     function addPlayerReadyCallback( callback ) {
-      playerReadyCallbacks.unshift( callback );
+      if ( playerReadyCallbacks.indexOf( callback ) < 0 ) {
+        playerReadyCallbacks.unshift( callback );
+      }
+    }
+
+    function addMetadataReadyCallback( callback ) {
+      if ( metadataReadyCallbacks.indexOf( callback ) < 0 ) {
+        metadataReadyCallbacks.unshift( callback );
+      }
     }
 
     function onPlayerReady( event ) {
-      playerReady = true;
+      if ( player === event.target ) {
+        playerReady = true;
+        while( playerReadyCallbacks.length ) {
+          fn = playerReadyCallbacks.pop();
+          fn();
+        }
+      }
     }
 
     // YouTube sometimes sends a duration of 0.  From the docs:
@@ -122,7 +143,7 @@
     function getDuration() {
       if( !playerReady ) {
         // Queue a getDuration() call so we have correct duration info for loadedmetadata
-        addPlayerReadyCallback( function() { getDuration(); } );
+        addPlayerReadyCallback( getDuration );
         return impl.duration;
       }
 
@@ -184,13 +205,19 @@
     }
 
     function onPlayerStateChange( event ) {
-      switch( event.data ) {
+      function updateDuration() {
+        var fn;
 
-        // unstarted
-        case -1:
+        if ( !impl.readyState && playerReady && getDuration() ) {
           // XXX: this should really live in cued below, but doesn't work.
           impl.readyState = self.HAVE_METADATA;
           self.dispatchEvent( "loadedmetadata" );
+          bufferedInterval = setInterval( monitorBuffered, 50 );
+
+          while( metadataReadyCallbacks.length ) {
+            fn = metadataReadyCallbacks.pop();
+            fn();
+          }
 
           self.dispatchEvent( "loadeddata" );
 
@@ -205,15 +232,17 @@
           if( impl.autoplay ) {
             self.play();
           }
+          return;
+        }
 
-          var i = playerReadyCallbacks.length;
-          while( i-- ) {
-            playerReadyCallbacks[ i ]();
-            delete playerReadyCallbacks[ i ];
-          }
+        if (!updateDurationTimeout) {
+          updateDurationTimeout = setTimeout( updateDuration, 50 );
+        }
+      }
 
-          break;
+      updateDuration();
 
+      switch( event.data ) {
         // ended
         case YT.PlayerState.ENDED:
           onEnded();
@@ -240,6 +269,15 @@
           // XXX: cued doesn't seem to fire reliably, bug in youtube api?
           break;
       }
+      if (event.data !== YT.PlayerState.BUFFERING && playerState === YT.PlayerState.BUFFERING) {
+        onProgress();
+      }
+
+      playerState = event.data;
+    }
+
+    function onPlaybackQualityChange ( event ) {
+      self.dispatchEvent( "playbackqualitychange" );
     }
 
     function destroyPlayer() {
@@ -247,10 +285,21 @@
         return;
       }
       clearInterval( currentTimeInterval );
-      player.stopVideo();
-      player.clearVideo();
+      clearInterval( bufferedInterval );
+      clearTimeout( stateMonitorTimeout );
+      clearTimeout( updateDurationTimeout );
+      Popcorn.forEach( stateMonitors, function(obj, i) {
+        delete stateMonitors[i];
+      });
 
-      parent.removeChild( elem );
+      player.stopVideo();
+      if ( player.clearVideo ) {
+        player.clearVideo();
+      }
+
+      if ( elem && elem.parentNode ) {
+        elem.parentNode.removeChild( elem );
+      }
       elem = null;
     }
 
@@ -328,10 +377,12 @@
         events: {
           'onReady': onPlayerReady,
           'onError': onPlayerError,
-          'onStateChange': onPlayerStateChange
+          'onStateChange': onPlayerStateChange,
+          'onPlaybackQualityChange': onPlaybackQualityChange,
         }
       });
 
+      playerReady = false;
       impl.networkState = self.NETWORK_LOADING;
       self.dispatchEvent( "loadstart" );
       self.dispatchEvent( "progress" );
@@ -340,6 +391,52 @@
       // and can dispatch durationchange.
       forcedLoadMetadata = false;
       getDuration();
+    }
+
+    function monitorState() {
+      var finished = true;
+
+      Popcorn.forEach( stateMonitors, function(change, i) {
+        change = stateMonitors[ i ];
+
+        if ( typeof player[i] !== 'function' ) {
+
+          delete stateMonitors[i];
+          return;
+
+        }
+
+        if ( player[i]() !== change.val ) {
+
+          self.dispatchEvent( change.evt );
+          delete stateMonitors[i];
+          return;
+
+        }
+
+        finished = false;
+      });
+
+      if (finished) {
+        stateMonitorTimeout = false;
+      } else {
+        stateMonitorTimeout = setTimeout( monitorState, 10 );
+      }
+    }
+
+    function changeState(playerHook, value, eventName) {
+      if (stateMonitors[playerHook]) {
+        return;
+      }
+
+      stateMonitors[playerHook] = {
+        val: value,
+        evt: eventName
+      };
+
+      if (!stateMonitorTimeout) {
+        stateMonitorTimeout = setTimeout(monitorState);
+      }
     }
 
     function monitorCurrentTime() {
@@ -362,6 +459,20 @@
       lastCurrentTime = impl.currentTime;
     }
 
+    function monitorBuffered() {
+      var fraction = player.getVideoLoadedFraction();
+
+      if ( lastLoadedFraction !== fraction ) {
+        lastLoadedFraction = fraction;
+
+        onProgress();
+
+        if (fraction >= 1) {
+          clearInterval( bufferedInterval );
+        }
+      }
+    }
+
     function getCurrentTime() {
       if( !playerReady ) {
         return 0;
@@ -373,10 +484,14 @@
 
     function changeCurrentTime( aTime ) {
       if( !playerReady ) {
-        addPlayerReadyCallback( function() { changeCurrentTime( aTime ); } );
+        addMetadataReadyCallback( function() { changeCurrentTime( aTime ); } );
         return;
       }
 
+      if ( !currentTimeInterval ) {
+        currentTimeInterval = setInterval( monitorCurrentTime,
+                                           CURRENT_TIME_MONITOR_MS ) ;
+      }
       onSeeking( aTime );
       player.seekTo( aTime );
     }
@@ -402,6 +517,11 @@
     }
 
     function onPlay() {
+      if (impl.seeking && impl.paused) {
+        player.pauseVideo();
+        return;
+      }
+
       // We've called play once (maybe through autoplay),
       // no need to force it from now on.
       forcedLoadMetadata = true;
@@ -416,7 +536,9 @@
 
         // Only 1 play when video.loop=true
         if ( impl.loop ) {
-          self.dispatchEvent( "play" );
+          setTimeout(function() {
+            self.dispatchEvent( "play" );
+          }, 10);
         }
       }
 
@@ -434,9 +556,13 @@
       }
     }
 
+    function onProgress() {
+      self.dispatchEvent( "progress" );
+    }
+
     self.play = function() {
       if( !playerReady ) {
-        addPlayerReadyCallback( function() { self.play(); } );
+        addMetadataReadyCallback( function() { self.play(); } );
         return;
       }
       player.playVideo();
@@ -450,7 +576,7 @@
 
     self.pause = function() {
       if( !playerReady ) {
-        addPlayerReadyCallback( function() { self.pause(); } );
+        addMetadataReadyCallback( function() { self.pause(); } );
         return;
       }
       player.pauseVideo();
@@ -467,15 +593,15 @@
     }
 
     function setVolume( aValue ) {
+      impl.volume = aValue;
       if( !playerReady ) {
-        impl.volume = aValue;
-        addPlayerReadyCallback( function() {
+        addMetadataReadyCallback( function() {
           setVolume( impl.volume );
         });
         return;
       }
+      changeState( "getVolume", player.getVolume(), "volumechange" );
       player.setVolume( aValue );
-      self.dispatchEvent( "volumechange" );
     }
 
     function getVolume() {
@@ -486,18 +612,22 @@
     }
 
     function setMuted( aValue ) {
+      impl.muted = aValue;
       if( !playerReady ) {
-        impl.muted = aValue;
-        addPlayerReadyCallback( function() { setMuted( impl.muted ); } );
+        addMetadataReadyCallback( function() { setMuted( impl.muted ); } );
         return;
       }
+      changeState( "isMuted", player.isMuted(), "volumechange" );
       player[ aValue ? "mute" : "unMute" ]();
-      self.dispatchEvent( "volumechange" );
     }
 
     function getMuted() {
       // YouTube has isMuted(), but for sync access we use impl.muted
       return impl.muted;
+    }
+
+    function updateSize() {
+      player.setSize( impl.width, impl.height );
     }
 
     Object.defineProperties( self, {
@@ -537,6 +667,15 @@
         },
         set: function( aValue ) {
           impl.width = aValue;
+          if (elem) {
+            elem.width = aValue;
+          }
+
+          if( playerReady ) {
+              player.setSize( impl.width, impl.height );
+          } else {
+              addPlayerReadyCallback( updateSize );
+          }
         }
       },
 
@@ -546,6 +685,15 @@
         },
         set: function( aValue ) {
           impl.height = aValue;
+          if (elem) {
+            elem.height = aValue;
+          }
+
+          if( playerReady ) {
+              player.setSize( impl.width, impl.height );
+          } else {
+              addPlayerReadyCallback( updateSize );
+          }
         }
       },
 
@@ -624,8 +772,69 @@
         get: function() {
           return impl.error;
         }
+      },
+
+      buffered: {
+        get: function () {
+          var timeRanges = {
+            start: function( index ) {
+              if (index === 0) {
+                return 0;
+              }
+
+              //throw fake DOMException/INDEX_SIZE_ERR
+              throw "INDEX_SIZE_ERR: DOM Exception 1";
+            },
+            end: function( index ) {
+              var duration;
+              if (index === 0) {
+                duration = getDuration();
+                if (!duration) {
+                  return 0;
+                }
+
+                return duration * player.getVideoLoadedFraction();
+              }
+
+              //throw fake DOMException/INDEX_SIZE_ERR
+              throw "INDEX_SIZE_ERR: DOM Exception 1";
+            }
+          };
+
+          Object.defineProperties( timeRanges, {
+            length: {
+              get: function() {
+                return 1;
+              }
+            }
+          });
+
+          return timeRanges;
+        }
       }
     });
+
+    self._util.getPlaybackQuality = function() {
+      return playerReady && player.getPlaybackQuality() || impl.quality || 'default';
+    };
+
+    self._util.setPlaybackQuality = function( quality ) {
+      impl.quality = quality;
+
+      if( !playerReady ) {
+        addMetadataReadyCallback( function() {
+          player.setPlaybackQuality( impl.quality );
+        });
+        return;
+      }
+
+      player.setPlaybackQuality( quality );
+    };
+
+    self._util.getAvailableQualityLevels = function() {
+      return playerReady && player.getAvailableQualityLevels() || [];
+    };
+
   }
 
   HTMLYouTubeVideoElement.prototype = new Popcorn._MediaElementProto();
