@@ -5,59 +5,58 @@
   CURRENT_TIME_MONITOR_MS = 10,
   EMPTY_STRING = "",
 
-  // YouTube suggests 200x200 as minimum, video spec says 300x150.
+  // Flowplayer suggests 200x200 as minimum, video spec says 300x150.
   MIN_WIDTH = 300,
   MIN_HEIGHT = 200,
 
-  // Example: http://www.youtube.com/watch?v=12345678901
-  regexYouTube = /^.*(?:\/|v=)(.{11})/,
+  // Example: http://www.Flowplayer.com/watch?v=12345678901
+  regexFlowplayer = /^.*(?:\/|v=)(.{11})/,
 
   ABS = Math.abs,
 
-  // Setup for YouTube API
+  // Setup for Flowplayer API
   ytReady = false,
   ytLoaded = false,
   ytCallbacks = [];
 
-  function isYouTubeReady() {
-    // If the YouTube iframe API isn't injected, to it now.
-    if( !ytLoaded ) {
-      var tag = document.createElement( "script" );
-      var protocol = window.location.protocol === "file:" ? "http:" : "";
+  // function isFlowplayerReady() {
+  //   // If the Flowplayer iframe API isn't injected, to it now.
+  //   if( !ytLoaded ) {
+  //     var tag = document.createElement( "script" );
+  //     var protocol = window.location.protocol === "file:" ? "http:" : "";
+  // 
+  //     tag.src = protocol + "//www.Flowplayer.com/iframe_api";
+  //     var firstScriptTag = document.getElementsByTagName( "script" )[ 0 ];
+  //     firstScriptTag.parentNode.insertBefore( tag, firstScriptTag );
+  //     ytLoaded = true;
+  //   }
+  //   return ytReady;
+  // }
+  // 
+  // function addFlowplayerCallback( callback ) {
+  //   ytCallbacks.unshift( callback );
+  // }
 
-      tag.src = protocol + "//www.youtube.com/iframe_api";
-      var firstScriptTag = document.getElementsByTagName( "script" )[ 0 ];
-      firstScriptTag.parentNode.insertBefore( tag, firstScriptTag );
-      ytLoaded = true;
-    }
-    return ytReady;
-  }
-
-  function addYouTubeCallback( callback ) {
-    ytCallbacks.unshift( callback );
-  }
-
-  // An existing YouTube references can break us.
+  // An existing Flowplayer references can break us.
   // Remove it and use the one we can trust.
-  if ( window.YT ) {
-    window.quarantineYT = window.YT;
-    window.YT = null;
-  }
+  // if ( window.YT ) {
+  //   window.quarantineYT = window.YT;
+  //   window.YT = null;
+  // }
+  // 
+  // window.onFlowplayerIframeAPIReady = function() {
+  //   ytReady = true;
+  //   var i = ytCallbacks.length;
+  //   while( i-- ) {
+  //     ytCallbacks[ i ]();
+  //     delete ytCallbacks[ i ];
+  //   }
+  // };
 
-  window.onYouTubeIframeAPIReady = function() {
-    ytReady = true;
-    var i = ytCallbacks.length;
-    while( i-- ) {
-      ytCallbacks[ i ]();
-      delete ytCallbacks[ i ];
-    }
-  };
-
-  function HTMLYouTubeVideoElement( id ) {
-
-    // YouTube iframe API requires postMessage
+  function HTMLFlowplayerVideoElement( id ) {
+    // Flowplayer iframe API requires postMessage
     if( !window.postMessage ) {
-      throw "ERROR: HTMLYouTubeVideoElement requires window.postMessage";
+      throw "ERROR: HTMLFlowplayerVideoElement requires window.postMessage";
     }
 
     var self = this,
@@ -100,12 +99,12 @@
       forcedLoadMetadata = false;
 
     // Namespace all events we'll produce
-    self._eventNamespace = Popcorn.guid( "HTMLYouTubeVideoElement::" );
+    self._eventNamespace = Popcorn.guid( "HTMLFlowplayerVideoElement::" );
 
     self.parentNode = parent;
 
-    // Mark this as YouTube
-    self._util.type = "YouTube";
+    // Mark this as Flowplayer
+    self._util.type = "Flowplayer";
 
     function addPlayerReadyCallback( callback ) {
       if ( playerReadyCallbacks.indexOf( callback ) < 0 ) {
@@ -129,7 +128,7 @@
       }
     }
 
-    // YouTube sometimes sends a duration of 0.  From the docs:
+    // Flowplayer sometimes sends a duration of 0.  From the docs:
     // "Note that getDuration() will return 0 until the video's metadata is loaded,
     // which normally happens just after the video starts playing."
     function forceLoadMetadata() {
@@ -150,7 +149,7 @@
       var oldDuration = impl.duration,
           newDuration = player.getDuration();
 
-      // Deal with duration=0 from YouTube
+      // Deal with duration=0 from Flowplayer
       if( newDuration ) {
         if( oldDuration !== newDuration ) {
           impl.duration = newDuration;
@@ -166,7 +165,7 @@
     }
 
     function onPlayerError(event) {
-      // There's no perfect mapping to HTML5 errors from YouTube errors.
+      // There's no perfect mapping to HTML5 errors from Flowplayer errors.
       var err = { name: "MediaError" };
 
       switch( event.data ) {
@@ -266,7 +265,7 @@
 
         // video cued
         case YT.PlayerState.CUED:
-          // XXX: cued doesn't seem to fire reliably, bug in youtube api?
+          // XXX: cued doesn't seem to fire reliably, bug in Flowplayer api?
           break;
       }
       if (event.data !== YT.PlayerState.BUFFERING && playerState === YT.PlayerState.BUFFERING) {
@@ -316,184 +315,42 @@
 
       impl.src = aSrc;
 
-      // Make sure YouTube is ready, and if not, register a callback
-      if( !isYouTubeReady() ) {
-        addYouTubeCallback( function() { changeSrc( aSrc ); } );
-        return;
-      }
-
-      if( playerReady ) {
-        destroyPlayer();
-      }
-
       elem = document.createElement( "div" );
+      elem.className += " flowplayer";
       elem.width = impl.width;
       elem.height = impl.height;
+      
+      var video = document.createElement( "video" );
+      video.src = aSrc;
+      
+      elem.appendChild( video );
+      
       parent.appendChild( elem );
 
-      // Use any player vars passed on the URL
-      var playerVars = self._util.parseUri( aSrc ).queryKey;
+      player = flowplayer ( elem );
 
-      // Remove the video id, since we don't want to pass it
-      delete playerVars.v;
-
-      // Sync autoplay, but manage internally
-      impl.autoplay = playerVars.autoplay === "1" || impl.autoplay;
-      delete playerVars.autoplay;
-
-      // Sync loop, but manage internally
-      impl.loop = playerVars.loop === "1" || impl.loop;
-      delete playerVars.loop;
-
-      // Don't show related videos when ending
-      playerVars.rel = playerVars.rel || 0;
-
-      // Don't show YouTube's branding
-      playerVars.modestbranding = playerVars.modestbranding || 1;
-
-      // Don't show annotations by default
-      playerVars.iv_load_policy = playerVars.iv_load_policy || 3;
-
-      // Don't show video info before playing
-      playerVars.showinfo = playerVars.showinfo || 0;
-
-      // Specify our domain as origin for iframe security
-      var domain = window.location.protocol === "file:" ? "*" :
-        window.location.protocol + "//" + window.location.host;
-      playerVars.origin = playerVars.origin || domain;
-
-      // Show/hide controls. Sync with impl.controls and prefer URL value.
-      playerVars.controls = playerVars.controls || impl.controls ? 2 : 0;
-      impl.controls = playerVars.controls;
-
-      // Get video ID out of youtube url
-      aSrc = regexYouTube.exec( aSrc )[ 1 ];
-
-      player = new YT.Player( elem, {
-        width: impl.width,
-        height: impl.height,
-        videoId: aSrc,
-        playerVars: playerVars,
-        events: {
-          'onReady': onPlayerReady,
-          'onError': onPlayerError,
-          'onStateChange': onPlayerStateChange,
-          'onPlaybackQualityChange': onPlaybackQualityChange
-        }
-      });
-
-      playerReady = false;
       impl.networkState = self.NETWORK_LOADING;
       self.dispatchEvent( "loadstart" );
       self.dispatchEvent( "progress" );
-
-      // Queue a get duration call so we'll have duration info
-      // and can dispatch durationchange.
-      forcedLoadMetadata = false;
-      getDuration();
-    }
-
-    function monitorState() {
-      var finished = true;
-
-      Popcorn.forEach( stateMonitors, function(change, i) {
-        change = stateMonitors[ i ];
-
-        if ( typeof player[i] !== 'function' ) {
-
-          delete stateMonitors[i];
-          return;
-
-        }
-
-        if ( player[i]() !== change.val ) {
-
-          self.dispatchEvent( change.evt );
-          delete stateMonitors[i];
-          return;
-
-        }
-
-        finished = false;
-      });
-
-      if (finished) {
-        stateMonitorTimeout = false;
-      } else {
-        stateMonitorTimeout = setTimeout( monitorState, 10 );
-      }
-    }
-
-    function changeState(playerHook, value, eventName) {
-      if (stateMonitors[playerHook]) {
-        return;
-      }
-
-      stateMonitors[playerHook] = {
-        val: value,
-        evt: eventName
-      };
-
-      if (!stateMonitorTimeout) {
-        stateMonitorTimeout = setTimeout(monitorState);
-      }
-    }
-
-    function monitorCurrentTime() {
-      var currentTime = impl.currentTime = player.getCurrentTime();
-
-      // See if the user seeked the video via controls
-      if( !impl.seeking && ABS( lastCurrentTime - currentTime ) > CURRENT_TIME_MONITOR_MS ) {
-        onSeeking();
-        onSeeked();
-      }
-
-      // See if we had a pending seek via code.  YouTube drops us within
-      // 1 second of our target time, so we have to round a bit, or miss
-      // many seek ends.
-      if( ( seekTarget > -1 ) &&
-          ( ABS( currentTime - seekTarget ) < 1 ) ) {
-        seekTarget = -1;
-        onSeeked();
-      }
-      lastCurrentTime = impl.currentTime;
-    }
-
-    function monitorBuffered() {
-      var fraction = player.getVideoLoadedFraction();
-
-      if ( lastLoadedFraction !== fraction ) {
-        lastLoadedFraction = fraction;
-
-        onProgress();
-
-        if (fraction >= 1) {
-          clearInterval( bufferedInterval );
-        }
-      }
     }
 
     function getCurrentTime() {
-      if( !playerReady ) {
+      if( !player || !player.video ) {
         return 0;
       }
+      
+      impl.currentTime = player.video.time;
 
-      impl.currentTime = player.getCurrentTime();
       return impl.currentTime;
     }
 
     function changeCurrentTime( aTime ) {
-      if( !playerReady ) {
-        addMetadataReadyCallback( function() { changeCurrentTime( aTime ); } );
+      if( !player ) {
+        addPlayerReadyCallback( function() { changeCurrentTime( aTime ); } );
         return;
       }
 
-      if ( !currentTimeInterval ) {
-        currentTimeInterval = setInterval( monitorCurrentTime,
-                                           CURRENT_TIME_MONITOR_MS ) ;
-      }
-      onSeeking( aTime );
-      player.seekTo( aTime );
+      player.seek( aTime );
     }
 
     function onTimeUpdate() {
@@ -501,9 +358,6 @@
     }
 
     function onSeeking( target ) {
-      if( target !== undefined ) {
-        seekTarget = target;
-      }
       impl.seeking = true;
       self.dispatchEvent( "seeking" );
     }
@@ -512,42 +366,10 @@
       impl.seeking = false;
       self.dispatchEvent( "timeupdate" );
       self.dispatchEvent( "seeked" );
-      self.dispatchEvent( "canplay" );
-      self.dispatchEvent( "canplaythrough" );
     }
 
     function onPlay() {
-      if (impl.seeking && impl.paused) {
-        player.pauseVideo();
-        return;
-      }
-
-      // We've called play once (maybe through autoplay),
-      // no need to force it from now on.
-      forcedLoadMetadata = true;
-
-      if( impl.ended ) {
-        changeCurrentTime( 0 );
-      }
-
-      if ( !currentTimeInterval ) {
-        currentTimeInterval = setInterval( monitorCurrentTime,
-                                           CURRENT_TIME_MONITOR_MS ) ;
-
-        // Only 1 play when video.loop=true
-        if ( impl.loop ) {
-          setTimeout(function() {
-            self.dispatchEvent( "play" );
-          }, 10);
-        }
-      }
-
-      timeUpdateInterval = setInterval( onTimeUpdate,
-                                        self._util.TIMEUPDATE_MS );
-
-      if( impl.paused ) {
-        impl.paused = false;
-
+      if(impl.)
         // Only 1 play when video.loop=true
         if ( !impl.loop ) {
           self.dispatchEvent( "play" );
@@ -622,7 +444,7 @@
     }
 
     function getMuted() {
-      // YouTube has isMuted(), but for sync access we use impl.muted
+      // Flowplayer has isMuted(), but for sync access we use impl.muted
       return impl.muted;
     }
 
@@ -744,7 +566,7 @@
 
       volume: {
         get: function() {
-          // Remap from HTML5's 0-1 to YouTube's 0-100 range
+          // Remap from HTML5's 0-1 to Flowplayer's 0-100 range
           var volume = getVolume();
           return volume / 100;
         },
@@ -753,7 +575,7 @@
             throw "Volume value must be between 0.0 and 1.0";
           }
 
-          // Remap from HTML5's 0-1 to YouTube's 0-100 range
+          // Remap from HTML5's 0-1 to Flowplayer's 0-100 range
           aValue = aValue * 100;
           setVolume( aValue );
         }
@@ -837,24 +659,22 @@
 
   }
 
-  HTMLYouTubeVideoElement.prototype = new Popcorn._MediaElementProto();
-  HTMLYouTubeVideoElement.prototype.constructor = HTMLYouTubeVideoElement;
+  HTMLFlowplayerVideoElement.prototype = new Popcorn._MediaElementProto();
+  HTMLFlowplayerVideoElement.prototype.constructor = HTMLFlowplayerVideoElement;
 
   // Helper for identifying URLs we know how to play.
-  HTMLYouTubeVideoElement.prototype._canPlaySrc = function( url ) {
-    return (/(?:http:\/\/www\.|http:\/\/|www\.|\.|^)(youtu)/).test( url ) ?
-      "probably" :
-      EMPTY_STRING;
+  HTMLFlowplayerVideoElement.prototype._canPlaySrc = function( url ) {
+    return 'maybe';
   };
 
-  // We'll attempt to support a mime type of video/x-youtube
-  HTMLYouTubeVideoElement.prototype.canPlayType = function( type ) {
-    return type === "video/x-youtube" ? "probably" : EMPTY_STRING;
+  // We'll attempt to support a mime type of video/x-Flowplayer
+  HTMLFlowplayerVideoElement.prototype.canPlayType = function( type ) {
+    return type === "video/x-Flowplayer" ? "probably" : EMPTY_STRING;
   };
 
-  Popcorn.HTMLYouTubeVideoElement = function( id ) {
-    return new HTMLYouTubeVideoElement( id );
+  Popcorn.HTMLFlowplayerVideoElement = function( id ) {
+    return new HTMLFlowplayerVideoElement( id );
   };
-  Popcorn.HTMLYouTubeVideoElement._canPlaySrc = HTMLYouTubeVideoElement.prototype._canPlaySrc;
+  Popcorn.HTMLFlowplayerVideoElement._canPlaySrc = HTMLFlowplayerVideoElement.prototype._canPlaySrc;
 
 }( Popcorn, window, document ));
