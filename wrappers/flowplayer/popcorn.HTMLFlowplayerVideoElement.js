@@ -1,58 +1,5 @@
 (function( Popcorn, window, document ) {
 
-  var
-
-  CURRENT_TIME_MONITOR_MS = 10,
-  EMPTY_STRING = "",
-
-  // Flowplayer suggests 200x200 as minimum, video spec says 300x150.
-  MIN_WIDTH = 300,
-  MIN_HEIGHT = 200,
-
-  // Example: http://www.Flowplayer.com/watch?v=12345678901
-  regexFlowplayer = /^.*(?:\/|v=)(.{11})/,
-
-  ABS = Math.abs,
-
-  // Setup for Flowplayer API
-  ytReady = false,
-  ytLoaded = false,
-  ytCallbacks = [];
-
-  // function isFlowplayerReady() {
-  //   // If the Flowplayer iframe API isn't injected, to it now.
-  //   if( !ytLoaded ) {
-  //     var tag = document.createElement( "script" );
-  //     var protocol = window.location.protocol === "file:" ? "http:" : "";
-  // 
-  //     tag.src = protocol + "//www.Flowplayer.com/iframe_api";
-  //     var firstScriptTag = document.getElementsByTagName( "script" )[ 0 ];
-  //     firstScriptTag.parentNode.insertBefore( tag, firstScriptTag );
-  //     ytLoaded = true;
-  //   }
-  //   return ytReady;
-  // }
-  // 
-  // function addFlowplayerCallback( callback ) {
-  //   ytCallbacks.unshift( callback );
-  // }
-
-  // An existing Flowplayer references can break us.
-  // Remove it and use the one we can trust.
-  // if ( window.YT ) {
-  //   window.quarantineYT = window.YT;
-  //   window.YT = null;
-  // }
-  // 
-  // window.onFlowplayerIframeAPIReady = function() {
-  //   ytReady = true;
-  //   var i = ytCallbacks.length;
-  //   while( i-- ) {
-  //     ytCallbacks[ i ]();
-  //     delete ytCallbacks[ i ];
-  //   }
-  // };
-
   function HTMLFlowplayerVideoElement( id ) {
     // Flowplayer iframe API requires postMessage
     if( !window.postMessage ) {
@@ -112,12 +59,6 @@
       }
     }
 
-    function addMetadataReadyCallback( callback ) {
-      if ( metadataReadyCallbacks.indexOf( callback ) < 0 ) {
-        metadataReadyCallbacks.unshift( callback );
-      }
-    }
-
     function onPlayerReady( event ) {
       if ( player === event.target ) {
         playerReady = true;
@@ -126,157 +67,6 @@
           fn();
         }
       }
-    }
-
-    // Flowplayer sometimes sends a duration of 0.  From the docs:
-    // "Note that getDuration() will return 0 until the video's metadata is loaded,
-    // which normally happens just after the video starts playing."
-    function forceLoadMetadata() {
-      if( !forcedLoadMetadata ) {
-        forcedLoadMetadata = true;
-        self.play();
-        self.pause();
-      }
-    }
-
-    function getDuration() {
-      if( !playerReady ) {
-        // Queue a getDuration() call so we have correct duration info for loadedmetadata
-        addPlayerReadyCallback( getDuration );
-        return impl.duration;
-      }
-
-      var oldDuration = impl.duration,
-          newDuration = player.getDuration();
-
-      // Deal with duration=0 from Flowplayer
-      if( newDuration ) {
-        if( oldDuration !== newDuration ) {
-          impl.duration = newDuration;
-          self.dispatchEvent( "durationchange" );
-        }
-      } else {
-        // Force loading metadata, and wait on duration>0
-        forceLoadMetadata();
-        setTimeout( getDuration, 50 );
-      }
-
-      return newDuration;
-    }
-
-    function onPlayerError(event) {
-      // There's no perfect mapping to HTML5 errors from Flowplayer errors.
-      var err = { name: "MediaError" };
-
-      switch( event.data ) {
-
-        // invalid parameter
-        case 2:
-          err.message = "Invalid video parameter.";
-          err.code = MediaError.MEDIA_ERR_ABORTED;
-          break;
-
-        // HTML5 Error
-        case 5:
-          err.message = "The requested content cannot be played in an HTML5 player or another error related to the HTML5 player has occurred.";
-          err.code = MediaError.MEDIA_ERR_DECODE;
-
-        // requested video not found
-        case 100:
-          err.message = "Video not found.";
-          err.code = MediaError.MEDIA_ERR_NETWORK;
-          break;
-
-        // video can't be embedded by request of owner
-        case 101:
-        case 150:
-          err.message = "Video not usable.";
-          err.code = MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED;
-          break;
-
-        default:
-          err.message = "Unknown error.";
-          err.code = 5;
-      }
-
-      impl.error = err;
-      self.dispatchEvent( "error" );
-    }
-
-    function onPlayerStateChange( event ) {
-      function updateDuration() {
-        var fn;
-
-        if ( !impl.readyState && playerReady && getDuration() ) {
-          // XXX: this should really live in cued below, but doesn't work.
-          impl.readyState = self.HAVE_METADATA;
-          self.dispatchEvent( "loadedmetadata" );
-          bufferedInterval = setInterval( monitorBuffered, 50 );
-
-          while( metadataReadyCallbacks.length ) {
-            fn = metadataReadyCallbacks.pop();
-            fn();
-          }
-
-          self.dispatchEvent( "loadeddata" );
-
-          impl.readyState = self.HAVE_FUTURE_DATA;
-          self.dispatchEvent( "canplay" );
-
-          // We can't easily determine canplaythrough, but will send anyway.
-          impl.readyState = self.HAVE_ENOUGH_DATA;
-          self.dispatchEvent( "canplaythrough" );
-
-          // Auto-start if necessary
-          if( impl.autoplay ) {
-            self.play();
-          }
-          return;
-        }
-
-        if (!updateDurationTimeout) {
-          updateDurationTimeout = setTimeout( updateDuration, 50 );
-        }
-      }
-
-      updateDuration();
-
-      switch( event.data ) {
-        // ended
-        case YT.PlayerState.ENDED:
-          onEnded();
-          break;
-
-        // playing
-        case YT.PlayerState.PLAYING:
-          onPlay();
-          break;
-
-        // paused
-        case YT.PlayerState.PAUSED:
-          onPause();
-          break;
-
-        // buffering
-        case YT.PlayerState.BUFFERING:
-          impl.networkState = self.NETWORK_LOADING;
-          self.dispatchEvent( "waiting" );
-          break;
-
-        // video cued
-        case YT.PlayerState.CUED:
-          // XXX: cued doesn't seem to fire reliably, bug in Flowplayer api?
-          break;
-      }
-      if (event.data !== YT.PlayerState.BUFFERING && playerState === YT.PlayerState.BUFFERING) {
-        onProgress();
-      }
-
-      playerState = event.data;
-    }
-
-    function onPlaybackQualityChange ( event ) {
-      self.dispatchEvent( "playbackqualitychange" );
     }
 
     function destroyPlayer() {
@@ -352,31 +142,64 @@
 
       player.seek( aTime );
     }
+    
+    function onError(e, err) {      
+      err.name = "MediaError";
 
-    function onTimeUpdate() {
+      impl.error = err;
+      
+      self.dispatchEvent( "error" );
+    }
+
+    function onTimeUpdate( e, player ) {
       self.dispatchEvent( "timeupdate" );
     }
 
-    function onSeeking( target ) {
+    function onSeeking( e, player ) {
       impl.seeking = true;
       self.dispatchEvent( "seeking" );
     }
-
-    function onSeeked() {
+    
+    function onSeeked( e, player ) {
       impl.seeking = false;
       self.dispatchEvent( "timeupdate" );
       self.dispatchEvent( "seeked" );
     }
 
-    function onPlay() {
-      if(impl.)
-        // Only 1 play when video.loop=true
-        if ( !impl.loop ) {
-          self.dispatchEvent( "play" );
-        }
-        self.dispatchEvent( "playing" );
-      }
+    function onPlay( e, player ) {
+      impl.paused = false;
+      
+      self.dispatchEvent( "play" );
+      self.dispatchEvent( "playing" );
     }
+    
+    function onPause( e, player ) {
+      impl.paused = true;
+      
+      self.dispatchEvent( "pause" );
+    }
+    
+    function onVolumeChange( e, player, newLevel ) {
+      var muted = player.muted;
+      
+      impl.
+      impl.paused = true;
+      
+      self.dispatchEvent( "pause" );
+    }
+
+    player.bind( "beforeseek", onSeeking);
+    player.bind( "error", onError );
+    player.bind( "finish", onEnded );
+    player.bind( "load", onLoaded );
+    player.bind( "mute", onVolumeChange );
+    player.bind( "pause", onPause );
+    player.bind( "progress", onTimeUpdate );
+    player.bind( "ready", onReady );
+    player.bind( "resume", onPlaying );
+    player.bind( "seek", onSeeked );
+    player.bind( "unload", onUnloaded );
+    player.bind( "volume", onVolumeChange );
 
     function onProgress() {
       self.dispatchEvent( "progress" );
@@ -567,26 +390,21 @@
       volume: {
         get: function() {
           // Remap from HTML5's 0-1 to Flowplayer's 0-100 range
-          var volume = getVolume();
-          return volume / 100;
+          return player.volumeLevel;
         },
         set: function( aValue ) {
-          if( aValue < 0 || aValue > 1 ) {
-            throw "Volume value must be between 0.0 and 1.0";
-          }
-
-          // Remap from HTML5's 0-1 to Flowplayer's 0-100 range
-          aValue = aValue * 100;
-          setVolume( aValue );
+          player.volume( aValue );
         }
       },
 
       muted: {
         get: function() {
-          return getMuted();
+          return player.muted;
         },
         set: function( aValue ) {
-          setMuted( self._util.isAttributeSet( aValue ) );
+          if( (player.muted && !aValue) || (!player.muted && aValue) ) {
+            player.mute();
+          }
         }
       },
 
