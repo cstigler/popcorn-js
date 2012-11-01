@@ -463,7 +463,6 @@
 
     function monitorCurrentTime() {
       var currentTime = impl.currentTime = player.getCurrentTime();
-      console.log('monitorCurrentTime: ' + currentTime);
 
       // See if the user seeked the video via controls
       if( !impl.seeking && ABS( lastCurrentTime - currentTime ) > CURRENT_TIME_MONITOR_MS ) {
@@ -529,13 +528,9 @@
       }
       impl.seeking = true;
       self.dispatchEvent( "seeking" );
-      console.log('player state before seek: ' + player.getPlayerState());
-      console.log('playerReady: ' + playerReady);
     }
 
     function onSeeked() {
-      console.log('player state after seeked: ' + player.getPlayerState());
-      console.log('playerReady: ' + playerReady);
       impl.seeking = false;
       self.dispatchEvent( "timeupdate" );
       self.dispatchEvent( "seeked" );
@@ -551,7 +546,6 @@
 
       // We've called play once (maybe through autoplay),
       // no need to force it from now on.
-      console.log('onPlay');
       forcedLoadMetadata = true;
 
       if( impl.ended ) {
