@@ -97,6 +97,7 @@
       lastCurrentTime = 0,
       seekTarget = -1,
       timeUpdateInterval,
+      firstPlay = true,
       forcedLoadMetadata = false;
 
     // Namespace all events we'll produce
@@ -164,6 +165,25 @@
 
       return newDuration;
     }
+    
+    function updateDuration() {
+      var fn;
+
+      if ( getDuration() ) {
+        if(!impl.readyState) {
+          impl.readyState = self.HAVE_METADATA;
+        }
+        
+        self.dispatchEvent( "loadedmetadata" );
+
+        while( metadataReadyCallbacks.length ) {
+          fn = metadataReadyCallbacks.pop();
+          fn();
+        }
+      } else {
+        setTimeout( updateDuration, 50 );
+      }
+    }
 
     function onPlayerError(event) {
       // There's no perfect mapping to HTML5 errors from YouTube errors.
@@ -205,44 +225,14 @@
     }
 
     function onPlayerStateChange( event ) {
-      function updateDuration() {
-        var fn;
-
-        if ( !impl.readyState && playerReady && getDuration() ) {
-          // XXX: this should really live in cued below, but doesn't work.
-          impl.readyState = self.HAVE_METADATA;
-          self.dispatchEvent( "loadedmetadata" );
-          bufferedInterval = setInterval( monitorBuffered, 50 );
-
-          while( metadataReadyCallbacks.length ) {
-            fn = metadataReadyCallbacks.pop();
-            fn();
-          }
-
-          self.dispatchEvent( "loadeddata" );
-
-          impl.readyState = self.HAVE_FUTURE_DATA;
-          self.dispatchEvent( "canplay" );
-
-          // We can't easily determine canplaythrough, but will send anyway.
-          impl.readyState = self.HAVE_ENOUGH_DATA;
-          self.dispatchEvent( "canplaythrough" );
-
-          // Auto-start if necessary
-          if( impl.autoplay ) {
-            self.play();
-          }
-          return;
-        }
-
-        if (!updateDurationTimeout) {
-          updateDurationTimeout = setTimeout( updateDuration, 50 );
-        }
-      }
-
-      updateDuration();
-
       switch( event.data ) {
+        // unstarted
+        case -1:
+          // XXX: this should really live in cued below, but doesn't work.
+          updateDuration();
+          player.playVideo();
+          break;
+
         // ended
         case YT.PlayerState.ENDED:
           onEnded();
@@ -250,7 +240,39 @@
 
         // playing
         case YT.PlayerState.PLAYING:
-          onPlay();
+          if( firstPlay ) {
+            // fake ready event
+            firstPlay = false;
+            
+            impl.readyState = self.HAVE_METADATA;
+            self.dispatchEvent( "loadedmetadata" );
+            
+            bufferedInterval = setInterval( monitorBuffered, 50 );
+            
+            self.dispatchEvent( "loadeddata" );
+
+            impl.readyState = self.HAVE_FUTURE_DATA;
+            self.dispatchEvent( "canplay" );
+
+            // We can't easily determine canplaythrough, but will send anyway.
+            impl.readyState = self.HAVE_ENOUGH_DATA;
+            self.dispatchEvent( "canplaythrough" );
+
+            // Auto-start if necessary
+            if( impl.autoplay ) {
+              onPlay();
+            } else {
+              player.pauseVideo();
+            }
+
+            var i = playerReadyCallbacks.length;
+            while( i-- ) {
+              playerReadyCallbacks[ i ]();
+              delete playerReadyCallbacks[ i ];
+            }
+          } else {
+            onPlay();
+          }
           break;
 
         // paused
@@ -441,6 +463,7 @@
 
     function monitorCurrentTime() {
       var currentTime = impl.currentTime = player.getCurrentTime();
+      console.log('monitorCurrentTime: ' + currentTime);
 
       // See if the user seeked the video via controls
       if( !impl.seeking && ABS( lastCurrentTime - currentTime ) > CURRENT_TIME_MONITOR_MS ) {
@@ -506,9 +529,13 @@
       }
       impl.seeking = true;
       self.dispatchEvent( "seeking" );
+      console.log('player state before seek: ' + player.getPlayerState());
+      console.log('playerReady: ' + playerReady);
     }
 
     function onSeeked() {
+      console.log('player state after seeked: ' + player.getPlayerState());
+      console.log('playerReady: ' + playerReady);
       impl.seeking = false;
       self.dispatchEvent( "timeupdate" );
       self.dispatchEvent( "seeked" );
@@ -524,6 +551,7 @@
 
       // We've called play once (maybe through autoplay),
       // no need to force it from now on.
+      console.log('onPlay');
       forcedLoadMetadata = true;
 
       if( impl.ended ) {
