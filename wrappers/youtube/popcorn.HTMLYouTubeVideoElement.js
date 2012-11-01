@@ -357,6 +357,7 @@
 
     function monitorCurrentTime() {
       var currentTime = impl.currentTime = player.getCurrentTime();
+      console.log('monitorCurrentTime: ' + currentTime);
 
       // See if the user seeked the video via controls
       if( !impl.seeking && ABS( lastCurrentTime - currentTime ) > CURRENT_TIME_MONITOR_MS ) {
@@ -421,6 +422,7 @@
     function onPlay() {
       // We've called play once (maybe through autoplay),
       // no need to force it from now on.
+      console.log('onPlay');
       forcedLoadMetadata = true;
 
       if( impl.ended ) {
