@@ -19,6 +19,28 @@
   ytLoaded = false,
   ytCallbacks = [];
 
+  var callbackQueue = function() {
+    var _queue = [],
+        _running = false;
+
+    return {
+      next: function() {
+        _running = false;
+        _queue.shift();
+        _queue[ 0 ] && _queue[ 0 ]();
+      },
+      add: function( callback ) {
+        _queue.push(function() {
+          _running = true;
+          callback && callback();
+        });
+
+        // if there is only one item on the queue, start it
+        !_running && _queue[ 0 ]();
+      }
+    };
+  };
+
   function isYouTubeReady() {
     // If the YouTube iframe API isn't injected, to it now.
     if( !ytLoaded ) {
@@ -98,7 +120,8 @@
       seekTarget = -1,
       timeUpdateInterval,
       firstPlay = true,
-      forcedLoadMetadata = false;
+      forcedLoadMetadata = false,
+      actionQueue = callbackQueue();
 
     // Namespace all events we'll produce
     self._eventNamespace = Popcorn.guid( "HTMLYouTubeVideoElement::" );
@@ -123,6 +146,9 @@
     function onPlayerReady( event ) {
       if ( player === event.target ) {
         playerReady = true;
+
+        self.play();
+
         while( playerReadyCallbacks.length ) {
           fn = playerReadyCallbacks.pop();
           fn();
@@ -244,9 +270,14 @@
             // fake ready event
             firstPlay = false;
             
-            impl.readyState = self.HAVE_METADATA;
-            self.dispatchEvent( "loadedmetadata" );
-            
+            // Auto-start if necessary
+            if( impl.autoplay ) {
+              onPlay();
+            } else {
+              actionQueue.next();
+              player.pauseVideo();
+            }
+                        
             bufferedInterval = setInterval( monitorBuffered, 50 );
             
             self.dispatchEvent( "loadeddata" );
@@ -257,19 +288,6 @@
             // We can't easily determine canplaythrough, but will send anyway.
             impl.readyState = self.HAVE_ENOUGH_DATA;
             self.dispatchEvent( "canplaythrough" );
-
-            // Auto-start if necessary
-            if( impl.autoplay ) {
-              onPlay();
-            } else {
-              player.pauseVideo();
-            }
-
-            var i = playerReadyCallbacks.length;
-            while( i-- ) {
-              playerReadyCallbacks[ i ]();
-              delete playerReadyCallbacks[ i ];
-            }
           } else {
             onPlay();
           }
@@ -514,8 +532,11 @@
         currentTimeInterval = setInterval( monitorCurrentTime,
                                            CURRENT_TIME_MONITOR_MS ) ;
       }
-      onSeeking( aTime );
-      player.seekTo( aTime );
+
+      actionQueue.add(function() {
+        onSeeking( aTime );
+        player.seekTo( aTime );
+      });
     }
 
     function onTimeUpdate() {
@@ -536,6 +557,8 @@
       self.dispatchEvent( "seeked" );
       self.dispatchEvent( "canplay" );
       self.dispatchEvent( "canplaythrough" );
+
+      actionQueue.next();
     }
 
     function onPlay() {
@@ -576,6 +599,8 @@
         }
         self.dispatchEvent( "playing" );
       }
+
+      actionQueue.next();
     }
 
     function onProgress() {
@@ -587,13 +612,23 @@
         addMetadataReadyCallback( function() { self.play(); } );
         return;
       }
-      player.playVideo();
+      
+      actionQueue.add(function() {
+        if ( player.getPlayerState() !== 1 ) {
+          seeking = false;
+          player.playVideo();
+        } else {
+          actionQueue.next();
+        }
+      });
     };
 
     function onPause() {
       impl.paused = true;
       clearInterval( timeUpdateInterval );
       self.dispatchEvent( "pause" );
+
+      actionQueue.next();
     }
 
     self.pause = function() {
@@ -601,7 +636,15 @@
         addMetadataReadyCallback( function() { self.pause(); } );
         return;
       }
-      player.pauseVideo();
+
+      actionQueue.add(function() {
+        if ( player.getPlayerState() !== 2 ) {
+          seeking = false;
+          player.pauseVideo();
+        } else {
+          actionQueue.next();
+        }
+      });
     };
 
     function onEnded() {
