@@ -111,6 +111,8 @@
     sub.end = toSeconds( node.getAttribute( "end" ), timeOffset );
     sub.target = getNodeRegion( node, region );
 
+    console.log('node.getAttribute("begin") = ' + node.getAttribute( "begin" ) + ', timeOffset = ' + timeOffset + ', sub.start = ' + sub.start);
+
     if ( sub.end < 0 ) {
       // No end given, infer duration if possible
       // Otherwise, give end as MAX_VALUE
@@ -122,6 +124,8 @@
         sub.end = Number.MAX_VALUE;
       }
     }
+
+    console.log('parsed sub: ' + JSON.stringify(sub));
 
     return { subtitle : sub };
   }
