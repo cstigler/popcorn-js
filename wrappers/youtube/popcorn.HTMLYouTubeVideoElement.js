@@ -418,7 +418,7 @@
           'onReady': onPlayerReady,
           'onError': onPlayerError,
           'onStateChange': onPlayerStateChange,
-          'onPlaybackQualityChange': onPlaybackQualityChange,
+          'onPlaybackQualityChange': onPlaybackQualityChange
         }
       });
 
