@@ -16,7 +16,7 @@
           
           style.width = bcRect.width + "px";
           style.left = bcRect.left + "px";
-          style.top = bcRect.top + bcRect.height - ctxContainer.offsetHeight - 40 + "px";
+          style.top = bcRect.top + window.scrollY + bcRect.height - ctxContainer.offsetHeight - 40 + "px";
 
           setTimeout( updatePosition, 100 );
         };
