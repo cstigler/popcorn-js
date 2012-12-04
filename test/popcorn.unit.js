@@ -4466,21 +4466,24 @@ asyncTest( "Cue API", 12, function() {
 
 
     // Modify an existing cue's function
-    p.cue( "c", function named() {});
+    function firstFn() {}
+    function secondFn() {}
 
-    equal( p.data.trackEvents.byStart.length, 7, "Modify an existing cue's function, p.cue( 'c', function() {} );" );
+    p.cue( "c", firstFn );
 
-    equal( p.getTrackEvent( "c" )._natives.start.name, "named", "Function modified, named" );
+    equal( p.data.trackEvents.byStart.length, 7, "Modify an existing cue's function, p.cue( 'c', firstFn );" );
+
+    equal( p.getTrackEvent( "c" )._natives.start, firstFn, "Function modified, is 'firstFn'" );
 
 
     // Modify an existing cue's time and function
-    p.cue( "c", 14, function renamed() {});
+    p.cue( "c", 14, secondFn );
 
-    equal( p.data.trackEvents.byStart.length, 7, "Modify an existing cue's time and function, p.cue( 'c', 14, function renamed() {});" );
+    equal( p.data.trackEvents.byStart.length, 7, "Modify an existing cue's time and function, p.cue( 'c', 14, secondFn );" );
 
     equal( p.getTrackEvent( "c" ).start, 14, "Time modified, 14" );
 
-    equal( p.getTrackEvent( "c" )._natives.start.name, "renamed", "Function modified, renamed" );
+    equal( p.getTrackEvent( "c" )._natives.start, secondFn, "Function modified, is 'secondFn'" );
 
 
     start();
@@ -4708,6 +4711,71 @@ test( "Modify cue or trackevent w/o update function provided", 3, function() {
   });
 
   $pop.noupdateprovided( id, {} );
+
+  $pop.noupdateprovided( id, updateOptions );
+
+  Popcorn.removePlugin( "noupdateprovided" );
+  $pop.destroy();
+
+});
+
+test( "trackchange w/ update function provided", 3, function() {
+  var $pop = Popcorn( "#video" ),
+      id = "test-id",
+      updateOptions = {
+        text: "New Text"
+      };
+
+  Popcorn.plugin( "updateprovided", {
+    _setup: function() {},
+    start: function() {},
+    end: function(){},
+    _teardown: function( trackEvent ) {},
+    _update: function( trackEvent, newOptions ) {}
+  });
+
+  $pop.updateprovided( id, {
+    start: 2,
+    end: 5,
+    text: "Old Text"
+  });
+
+  $pop.on( "trackchange", function( e ) {
+    ok( true, "trackchange fired with an update function provided" );
+    equal( e.previousValue.text, "Old Text", "Previous options passed expected value" );
+    deepEqual( e.currentValue.text, updateOptions.text, "Previous options passed expected value" );
+  });
+
+  $pop.updateprovided( id, updateOptions );
+
+  Popcorn.removePlugin( "updateprovided" );
+  $pop.destroy();
+
+});
+
+test( "trackchange w/o update function provided", 3, function() {
+  var $pop = Popcorn( "#video" ),
+      id = "test-id",
+      updateOptions = {
+        text: "New Text"
+      };
+
+  Popcorn.plugin( "noupdateprovided", {
+    _setup: function( options ) {},
+    start: function() {},
+    end: function(){},
+    _teardown: function() {}
+  });
+
+  $pop.noupdateprovided( id, {
+    text: "Old Text"
+  });
+
+  $pop.on( "trackchange", function( e ) {
+    ok( true, "trackchange fired without an update function provided" );
+    equal( e.previousValue.text, "Old Text", "Previous options passed expected value" );
+    deepEqual( e.currentValue.text, updateOptions.text, "Previous options passed expected value" );
+  });
 
   $pop.noupdateprovided( id, updateOptions );
 
